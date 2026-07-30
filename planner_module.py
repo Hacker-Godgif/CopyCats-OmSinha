@@ -525,3 +525,174 @@ class ReflectionMemoryStore:
         )
 
         return summary_msg, diff
+
+
+# -----------------------------------------------------------------------------
+# 5. FREE SLOT PLANNER
+# -----------------------------------------------------------------------------
+class FreeSlotPlanner:
+    """
+    Generates a daily plan into free time slots based on timetable, pending tasks,
+    exam dates, and attendance risk.
+    """
+
+    @staticmethod
+    def suggest_free_slots(store, target_date: str) -> Dict[str, Any]:
+        timetable = store.timetable()
+        if not timetable:
+            return {"has_timetable": False, "slots": []}
+
+        try:
+            target_dt = datetime.strptime(target_date[:10], "%Y-%m-%d").date()
+        except Exception:
+            target_dt = date.today()
+
+        weekday = target_dt.weekday() # 0 = Mon ... 5 = Sat, 6 = Sun
+        is_weekend = (weekday in (5, 6))
+
+        # Get classes for today
+        today_classes = [c for c in timetable if c.get("weekday") == weekday]
+        
+        # Determine standard study windows for the day (excluding class times)
+        candidate_hours = [9, 10, 11, 14, 15, 16, 17, 18]
+        
+        # Parse class start and end minutes
+        class_spans = []
+        for c in today_classes:
+            try:
+                sh, sm = map(int, c["start_time"].split(":"))
+                eh, em = map(int, c["end_time"].split(":"))
+                class_spans.append((sh * 60 + sm, eh * 60 + em))
+            except Exception:
+                pass
+
+        free_time_blocks = []
+        for h in candidate_hours:
+            slot_start = h * 60
+            slot_end = (h + 1) * 60
+            overlaps = False
+            for c_start, c_end in class_spans:
+                if not (slot_end <= c_start or slot_start >= c_end):
+                    overlaps = True
+                    break
+            if not overlaps:
+                free_time_blocks.append((slot_start, slot_end))
+
+        profile = store.get_profile() or {}
+        max_slots_count = max(2, min(8, int(float(profile.get("daily_hours", 3)))))
+        
+        if not free_time_blocks:
+            free_time_blocks = [(18 * 60, 19 * 60), (19 * 60, 20 * 60), (20 * 60, 21 * 60)]
+
+        free_time_blocks = free_time_blocks[:max_slots_count]
+
+        pending_tasks = store.tasks("pending")
+        courses = store.courses()
+
+        upcoming_exams = []
+        regular_tasks = []
+
+        for task in pending_tasks:
+            due_at = task.get("due_at")
+            is_exam = False
+            days_until = None
+            if due_at:
+                try:
+                    due_dt = datetime.strptime(due_at[:10], "%Y-%m-%d").date()
+                    days_until = (due_dt - target_dt).days
+                except Exception:
+                    days_until = None
+
+            title_lower = (task.get("title") or "").lower()
+            source_lower = (task.get("source_ref") or "").lower()
+            if "exam" in title_lower or "exam" in source_lower or "midterm" in title_lower or "datesheet" in source_lower:
+                is_exam = True
+
+            if is_exam or (days_until is not None and 0 <= days_until <= 7 and ("revision" in title_lower or "exam" in title_lower or "datesheet" in source_lower)):
+                upcoming_exams.append({
+                    "task": task,
+                    "days_until": max(0, days_until) if days_until is not None else 7,
+                    "course": task.get("course") or "General"
+                })
+            else:
+                regular_tasks.append(task)
+
+        upcoming_exams.sort(key=lambda x: x["days_until"])
+
+        slots = []
+
+        for idx, (start_m, end_m) in enumerate(free_time_blocks):
+            start_str = f"{start_m // 60:02d}:{start_m % 60:02d}"
+            end_str = f"{end_m // 60:02d}:{end_m % 60:02d}"
+            time_range = f"{start_str} - {end_str}"
+
+            if idx < len(upcoming_exams):
+                exam_info = upcoming_exams[idx]
+                t = exam_info["task"]
+                days = exam_info["days_until"]
+                days_text = "today" if days == 0 else f"in {days} day{'s' if days > 1 else ''}"
+                course_name = t.get("course") or "Exam"
+                slots.append({
+                    "time_range": time_range,
+                    "start_minutes": start_m,
+                    "suggestion_text": f"Revision: {course_name}",
+                    "suggestion_type": "Exam prep",
+                    "source_ref": f"{course_name} exam {days_text}",
+                    "course": course_name,
+                    "task_id": t.get("id")
+                })
+                continue
+
+            reg_idx = idx - len(upcoming_exams)
+            if reg_idx < len(regular_tasks):
+                t = regular_tasks[reg_idx]
+                due_info = f"Due {t['due_at'][:10]}" if t.get("due_at") else "Added by student"
+                slots.append({
+                    "time_range": time_range,
+                    "start_minutes": start_m,
+                    "suggestion_text": t["title"],
+                    "suggestion_type": "Assignment",
+                    "source_ref": t.get("source_ref") if (t.get("source_ref") and t.get("source_ref") != "Added by student") else due_info,
+                    "course": t.get("course", ""),
+                    "task_id": t.get("id")
+                })
+                continue
+
+            if is_weekend:
+                slots.append({
+                    "time_range": time_range,
+                    "start_minutes": start_m,
+                    "suggestion_text": "Weekly buffer & rest / Catch-up window",
+                    "suggestion_type": "Free time",
+                    "source_ref": "Weekend study buffer",
+                    "course": "",
+                    "task_id": None
+                })
+            else:
+                risk_course = None
+                if courses:
+                    sorted_c = sorted(courses, key=lambda x: x.get("percentage", 100))
+                    risk_course = sorted_c[0]
+
+                if risk_course:
+                    slots.append({
+                        "time_range": time_range,
+                        "start_minutes": start_m,
+                        "suggestion_text": f"Review {risk_course['name']} concepts",
+                        "suggestion_type": "Revision",
+                        "source_ref": f"lowest attendance: {risk_course['name']} {risk_course['percentage']}%",
+                        "course": risk_course["name"],
+                        "task_id": None
+                    })
+                else:
+                    slots.append({
+                        "time_range": time_range,
+                        "start_minutes": start_m,
+                        "suggestion_text": "Review weekly lecture notes & concepts",
+                        "suggestion_type": "Revision",
+                        "source_ref": "Weekday study target",
+                        "course": "",
+                        "task_id": None
+                    })
+
+        return {"has_timetable": True, "slots": slots}

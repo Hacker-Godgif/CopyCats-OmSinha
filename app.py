@@ -12,7 +12,7 @@ from flask import Flask, jsonify, render_template, request, Response
 from attendance_risk_agent import AttendanceRiskAgent
 from datesheet_parser import DatesheetParser
 from helpdesk_agent import GroundedHelpdeskAgent
-from planner_module import DeterministicConstraintSolver, PlanVerifier, ReflectionMemoryStore
+from planner_module import DeterministicConstraintSolver, PlanVerifier, ReflectionMemoryStore, FreeSlotPlanner
 from schema import AttendanceRecord, Task
 from storage import StudyOSStore
 from ai_timetable_agent import TimetableVisionAgent
@@ -45,11 +45,20 @@ def bootstrap():
     tasks = store.tasks()
     courses = store.courses()
     urgent = [task for task in tasks if task["status"] == "pending" and task["due_at"] and task["due_at"][:10] <= (date.today() + timedelta(days=3)).isoformat()]
+    today_plan = FreeSlotPlanner.suggest_free_slots(store, today_iso())
     return jsonify({
         "success": True, "profile": profile, "courses": courses, "tasks": tasks,
         "recent_imports": store.recent_imports(), "timetable": store.timetable(), "needs_onboarding": not bool(profile and profile["institution"]),
-        "urgent_tasks": urgent, "today": today_iso(),
+        "urgent_tasks": urgent, "today": today_iso(), "today_plan": today_plan,
     })
+
+
+@app.route("/api/suggest-free-slots", methods=["GET", "POST"])
+def suggest_free_slots():
+    data = request.get_json(silent=True) or {}
+    target_date = data.get("date") or request.args.get("date") or today_iso()
+    plan = FreeSlotPlanner.suggest_free_slots(store, target_date)
+    return jsonify({"success": True, "date": target_date, "today_plan": plan})
 
 
 @app.post("/api/profile")
