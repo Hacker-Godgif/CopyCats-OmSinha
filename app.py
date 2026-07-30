@@ -30,6 +30,12 @@ def api_error(message, code=400):
     return jsonify({"success": False, "error": message}), code
 
 
+@app.errorhandler(500)
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return jsonify({"success": False, "error": str(e) or "An internal server error occurred."}), 500
+
+
 def today_iso():
     return date.today().isoformat()
 
