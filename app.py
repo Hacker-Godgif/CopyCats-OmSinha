@@ -45,7 +45,7 @@ app.config.update(
     JSON_SORT_KEYS=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=True if os.environ.get("VERCEL") else False,
+    SESSION_COOKIE_SECURE=False,
     PERMANENT_SESSION_LIFETIME=timedelta(days=30)
 )
 store = StudyOSStore(str(DATA_DIR / "studyos.db"))
@@ -73,7 +73,18 @@ def index():
 
 
 def current_user_id():
-    return session.get("user_id") or "default"
+    user_id = session.get("user_id")
+    if not user_id:
+        header_uid = request.headers.get("X-User-Id")
+        if header_uid:
+            user = store.get_user_by_id(header_uid)
+            if user:
+                session.permanent = True
+                session["user_id"] = user["id"]
+                session["user_email"] = user["email"]
+                session["user_name"] = user["name"]
+                return user["id"]
+    return user_id or "default"
 
 
 @app.get("/api/bootstrap")
@@ -87,8 +98,7 @@ def bootstrap():
     today_plan = FreeSlotPlanner.suggest_free_slots(store, today_iso(), user_id=uid)
     exams = store.get_exams(uid)
     acad_proj = store.calculate_academic_attendance_projection(uid)
-    user_id = session.get("user_id")
-    current_user = store.get_user_by_id(user_id) if user_id else None
+    current_user = store.get_user_by_id(uid) if uid and uid != "default" else None
     return jsonify({
         "success": True, "profile": profile, "courses": courses, "tasks": tasks,
         "recent_imports": store.recent_imports(uid), "timetable": store.timetable(uid), "needs_onboarding": not bool(profile and profile["institution"]),
@@ -155,8 +165,8 @@ def auth_logout():
 
 @app.get("/api/auth/me")
 def auth_me():
-    user_id = session.get("user_id")
-    user = store.get_user_by_id(user_id) if user_id else None
+    uid = current_user_id()
+    user = store.get_user_by_id(uid) if uid and uid != "default" else None
     if user:
         return jsonify({"authenticated": True, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "auth_provider": user.get("auth_provider", "email")}})
     return jsonify({"authenticated": False, "user": None})
