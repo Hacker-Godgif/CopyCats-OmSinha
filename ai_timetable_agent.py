@@ -19,9 +19,24 @@ WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 
 class TimetableVisionAgent:
     def __init__(self):
         self._load_local_env()
-        self.api_key = os.getenv("AI_API_KEY", "")
-        self.base_url = os.getenv("AI_BASE_URL", "").rstrip("/")
-        self.model = os.getenv("AI_MODEL", "")
+        placeholders = {
+            "replace_with_your_key", "your_secret_key", "your_api_key", "your_key",
+            "your-vision-capable-model", "your_vision_capable_model", "your-model",
+            "https://your-provider.example/v1", "https://example.com/v1"
+        }
+
+        def get_val(ai_name, openai_name):
+            val1 = os.getenv(ai_name, "")
+            if val1 and val1.lower() not in placeholders and val1 not in placeholders:
+                return val1
+            val2 = os.getenv(openai_name, "")
+            if val2 and val2.lower() not in placeholders and val2 not in placeholders:
+                return val2
+            return val1 or val2 or ""
+
+        self.api_key = get_val("AI_API_KEY", "OPENAI_API_KEY")
+        self.base_url = get_val("AI_BASE_URL", "OPENAI_BASE_URL").rstrip("/")
+        self.model = get_val("AI_MODEL", "OPENAI_MODEL")
 
     @staticmethod
     def _load_local_env():
