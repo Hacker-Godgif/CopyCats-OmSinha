@@ -113,11 +113,18 @@ def import_google_classroom():
     custom_payload = data.get("assignments")
     imported_tasks = ClassroomImporter.import_mock_assignments(custom_payload)
     
+    existing = store.tasks()
+    existing_keys = {(t["title"].lower().strip(), (t.get("course") or "").lower().strip()) for t in existing}
+
     added_tasks = []
     urgent_cutoff = (date.today() + timedelta(days=3)).isoformat()
     urgent_count = 0
 
     for t in imported_tasks:
+        key = (t.title.lower().strip(), (t.course or "").lower().strip())
+        if key in existing_keys:
+            continue  # Exclude assignments that are already imported or completed
+
         due_str = t.due_at or ""
         is_urgent = bool(due_str and due_str[:10] <= urgent_cutoff)
         if is_urgent:
@@ -134,13 +141,13 @@ def import_google_classroom():
         saved_task["is_urgent"] = is_urgent
         added_tasks.append(saved_task)
 
-    store.log_import("google_classroom", "Google Classroom API", "confirmed", f"Imported {len(added_tasks)} assignments ({urgent_count} urgent)")
+    store.log_import("google_classroom", "Google Classroom API", "confirmed", f"Imported {len(added_tasks)} new assignments ({urgent_count} urgent)")
     return jsonify({
         "success": True,
         "count": len(added_tasks),
         "urgent_count": urgent_count,
         "tasks": added_tasks,
-        "message": f"Synced {len(added_tasks)} assignments from Google Classroom ({urgent_count} urgent)."
+        "message": f"Synced {len(added_tasks)} remaining assignments from Google Classroom ({urgent_count} urgent)." if added_tasks else "All Google Classroom assignments are up to date! No pending assignments left to sync."
     })
 
 
@@ -175,9 +182,16 @@ def google_callback():
         raw_assignments = GoogleAuthManager.fetch_live_assignments(access_token)
         imported_tasks = ClassroomImporter.import_mock_assignments(raw_assignments if raw_assignments else None)
         
+        existing = store.tasks()
+        existing_keys = {(t["title"].lower().strip(), (t.get("course") or "").lower().strip()) for t in existing}
+
         urgent_cutoff = (date.today() + timedelta(days=3)).isoformat()
         urgent_count = 0
         for t in imported_tasks:
+            key = (t.title.lower().strip(), (t.course or "").lower().strip())
+            if key in existing_keys:
+                continue
+
             due_str = t.due_at or ""
             if due_str and due_str[:10] <= urgent_cutoff:
                 urgent_count += 1

@@ -74,6 +74,11 @@ class GoogleAuthManager:
                 with urllib.request.urlopen(cw_req) as cw_resp:
                     cw_data = json.loads(cw_resp.read().decode("utf-8"))
                     for item in cw_data.get("courseWork", []):
+                        state = str(item.get("state", "PUBLISHED")).upper()
+                        # Skip assignments that are already turned in or completed
+                        if state in {"TURNED_IN", "RETURNED", "COMPLETED", "SUBMITTED"}:
+                            continue
+
                         due_date = item.get("dueDate", {})
                         raw_due = f"{due_date.get('year')}-{due_date.get('month'):02d}-{due_date.get('day'):02d}" if due_date.get("year") else ""
                         
@@ -82,7 +87,7 @@ class GoogleAuthManager:
                             "title": item.get("title", "Untitled Assignment"),
                             "course": c_name,
                             "dueDate": raw_due,
-                            "status": item.get("state", "PUBLISHED")
+                            "status": state
                         })
             except Exception:
                 continue
