@@ -233,22 +233,37 @@ class StudyOSStore:
             raise ValueError("End date must be on or after the start date.")
         if (end - start).days > 60:
             raise ValueError("Choose a holiday period of 60 days or fewer.")
-        courses = {item["name"].lower(): item for item in self.courses()}
+        courses_by_name = {item["name"].lower().strip(): item for item in self.courses()}
         timetable = self.timetable()
         if not timetable:
             raise ValueError("Upload a timetable image first so StudyOS knows which classes you would miss.")
+        
+        def find_course_record(t_name):
+            t_clean = t_name.lower().strip()
+            if t_clean in courses_by_name:
+                return courses_by_name[t_clean]
+            for c_name, record in courses_by_name.items():
+                if t_clean in c_name or c_name in t_clean:
+                    return record
+            t_tokens = set(t_clean.split())
+            for c_name, record in courses_by_name.items():
+                c_tokens = set(c_name.split())
+                if t_tokens & c_tokens:
+                    return record
+            return None
+
         missed = {}
         cursor = start
         while cursor <= end:
             for slot in timetable:
                 if slot["weekday"] == cursor.weekday():
-                    missed[slot["course"].lower()] = missed.get(slot["course"].lower(), 0) + 1
+                    missed[slot["course"]] = missed.get(slot["course"], 0) + 1
             cursor += timedelta(days=1)
         impacts, unknown_courses = [], []
-        for course_key, classes_missed in missed.items():
-            record = courses.get(course_key)
+        for course_name, classes_missed in missed.items():
+            record = find_course_record(course_name)
             if not record:
-                unknown_courses.append(course_key)
+                unknown_courses.append(course_name)
                 continue
             total = record["conducted_classes"] + classes_missed
             percentage = round(record["attended_classes"] / total * 100, 1) if total else 0
