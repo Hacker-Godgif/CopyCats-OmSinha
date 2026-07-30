@@ -70,7 +70,8 @@ def bootstrap():
     profile = store.get_profile()
     tasks = store.tasks(status="pending")
     courses = store.courses()
-    urgent = [task for task in tasks if task["due_at"] and task["due_at"][:10] <= (date.today() + timedelta(days=3)).isoformat()]
+    today_str = date.today().isoformat()
+    urgent = [task for task in tasks if task.get("due_at") and today_str <= task["due_at"][:10] <= (date.today() + timedelta(days=3)).isoformat()]
     today_plan = FreeSlotPlanner.suggest_free_slots(store, today_iso())
     exams = store.get_exams()
     acad_proj = store.calculate_academic_attendance_projection()
