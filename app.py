@@ -151,6 +151,24 @@ def import_google_classroom():
     })
 
 
+@app.get("/api/auth/google/status")
+def google_status():
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    user_email = session.get("google_user_email")
+    return jsonify({
+        "configured": bool(client_id),
+        "client_id": client_id if client_id else None,
+        "authenticated": bool(user_email),
+        "user_email": user_email
+    })
+
+
+@app.post("/api/auth/google/logout")
+def google_logout():
+    session.pop("google_user_email", None)
+    return jsonify({"success": True, "message": "Signed out of Google Classroom."})
+
+
 @app.get("/api/auth/google/login")
 def google_login():
     from classroom_importer import GoogleAuthManager
