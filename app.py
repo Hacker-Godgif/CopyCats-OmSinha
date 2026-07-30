@@ -22,7 +22,22 @@ from storage import StudyOSStore
 from ai_timetable_agent import TimetableVisionAgent
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+
+def get_data_dir():
+    if os.environ.get("VERCEL"):
+        tmp_dir = Path("/tmp")
+        root_db = BASE_DIR / "data" / "studyos.db"
+        tmp_db = tmp_dir / "studyos.db"
+        if root_db.exists() and not tmp_db.exists():
+            try:
+                import shutil
+                shutil.copy(root_db, tmp_db)
+            except Exception as e:
+                print(f"[Vercel DB Init Warning]: {e}")
+        return tmp_dir
+    return BASE_DIR / "data"
+
+DATA_DIR = get_data_dir()
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "studyos-secret-key-2026")
 app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024, JSON_SORT_KEYS=False)
