@@ -39,8 +39,15 @@ def get_data_dir():
 
 DATA_DIR = get_data_dir()
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "studyos-secret-key-2026")
-app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024, JSON_SORT_KEYS=False)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "studyos-secret-key-2026-production")
+app.config.update(
+    MAX_CONTENT_LENGTH=8 * 1024 * 1024,
+    JSON_SORT_KEYS=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=True if os.environ.get("VERCEL") else False,
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30)
+)
 store = StudyOSStore(str(DATA_DIR / "studyos.db"))
 reflection_store = ReflectionMemoryStore(str(DATA_DIR / "reflection.db"))
 helpdesk_agent = GroundedHelpdeskAgent(str(BASE_DIR / "campus_policies.json"))
@@ -107,6 +114,7 @@ def auth_signup():
 
     try:
         user = store.create_user(email, password=password, name=name, auth_provider="email")
+        session.permanent = True
         session["user_id"] = user["id"]
         session["user_email"] = user["email"]
         session["user_name"] = user["name"]
@@ -126,6 +134,7 @@ def auth_login():
 
     try:
         user = store.authenticate_user(email, password)
+        session.permanent = True
         session["user_id"] = user["id"]
         session["user_email"] = user["email"]
         session["user_name"] = user["name"]
@@ -339,6 +348,7 @@ def google_callback():
                     user = store.get_user_by_email(g_email)
                     if not user:
                         user = store.create_user(g_email, name=g_name, auth_provider="google")
+                    session.permanent = True
                     session["user_id"] = user["id"]
                     session["user_email"] = user["email"]
                     session["user_name"] = user["name"]

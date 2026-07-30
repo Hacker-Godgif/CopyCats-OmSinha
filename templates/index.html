@@ -662,10 +662,13 @@
       const authNotice = $('#auth-gate-notice');
       if (!d.user) {
         if (authDialog && !authDialog.open) {
-          authDialog.showModal();
+          try { authDialog.showModal(); } catch (e) {}
         }
         if (authNotice) authNotice.hidden = false;
       } else {
+        if (authDialog && authDialog.open) {
+          try { authDialog.close(); } catch (e) {}
+        }
         if (authNotice) authNotice.hidden = true;
       }
 
