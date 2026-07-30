@@ -137,6 +137,7 @@
     .modal footer { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
     #toast { position:fixed; right:16px; bottom:16px; max-width:350px; padding:12px 14px; border-radius:10px; background:#172033; color:#fff; box-shadow:0 8px 30px #10182844; z-index:5; }
     [data-theme="dark"] #toast { background:#1e293b; color:#f8fafc; border:1px solid #334155; }
+    .tag-dashed { display:inline-block; padding:2px 7px; border-radius:4px; font-size:0.72rem; font-weight:600; border:1px dashed var(--ink); color:var(--ink); background:transparent; white-space:nowrap; letter-spacing:0.02em; opacity:0.9; }
     #toast[hidden] { display:none; }
     @media(max-width:700px) { header { height:58px; } .profile-name { display:none; } main { padding-top:20px; } .stats,.two { grid-template-columns:1fr; } .course { grid-template-columns:1fr 58px; } .course .pill { grid-column:1/-1; justify-self:start; } .form-grid { grid-template-columns:1fr; } .top-actions .button { flex:1; text-align:center; } }
   </style>
@@ -153,7 +154,7 @@
     </div>
   </header>
   <main id="content">
-    <section aria-labelledby="home-title"><div class="eyebrow">Student workspace</div><h1 id="home-title">Make your next academic move clear.</h1><p class="lede">Upload your timetable or attendance screenshot. AI extracts details, tracks academic duration & exam dates, and calculates your exact bunk allowance.</p><div class="top-actions"><button class="button primary" id="add-task-button">Add a task</button><button class="button" id="sync-classroom-button">Sync Google Classroom</button><button class="button" id="import-button">Upload timetable image</button><a class="button" href="/api/calendar.ics">Export deadlines</a></div></section>
+    <section aria-labelledby="home-title"><div class="eyebrow">Student workspace</div><h1 id="home-title">Make your next academic move clear.</h1><p class="lede">Upload your timetable or attendance screenshot. AI extracts details, tracks academic duration & exam dates, and calculates your exact bunk allowance.</p><div class="top-actions"><button class="button primary" id="regenerate-today-button">Regenerate today's plan</button><button class="button" id="add-task-button">Add a task</button><button class="button" id="sync-classroom-button">Sync Google Classroom</button><button class="button" id="import-button">Upload timetable image</button><a class="button" href="/api/calendar.ics">Export deadlines</a></div></section>
     <div id="setup-notice" class="notice" hidden><strong>Complete your setup.</strong> Add your college, study time, and academic duration before relying on a plan. <button class="button small" id="setup-button">Set up now</button></div>
     <div id="app-notice" class="notice" hidden aria-live="polite"></div>
     <section class="grid stats" aria-label="Your study overview"><article class="card"><div class="subtle">Tasks due soon</div><div class="metric" id="urgent-count">0</div><div class="subtle">within the next 3 days</div></article><article class="card"><div class="subtle">Attendance to watch</div><div class="metric" id="risk-count">0</div><div class="subtle">courses below your threshold</div></article><article class="card"><div class="subtle">Scheduled Exams</div><div class="metric" id="exams-count">0</div><div class="subtle">exam dates in database</div></article></section>
@@ -167,7 +168,7 @@
       <button class="tab" role="tab" aria-selected="false" aria-controls="help-panel" id="help-tab" data-panel="help">Ask your college</button>
     </nav>
 
-    <section class="panel active" id="today-panel" role="tabpanel" aria-labelledby="today-tab"><div class="grid two"><article class="card"><div class="card-head"><div><h2>Today’s next steps</h2><p class="subtle">Complete, then re-plan if your day changes.</p></div><span class="pill" id="today-date"></span></div><ul class="list" id="task-list"></ul></article><aside class="card"><h2>Build a dependable habit</h2><p class="subtle" style="margin-top:8px">Start with the closest deadline. If a task is too large, add a smaller 30–60 minute step instead.</p><div class="notice" style="margin:16px 0 0">StudyOS is a planning aid, not an official record. Confirm attendance and exam rules with your institution.</div></aside></div></section>
+    <section class="panel active" id="today-panel" role="tabpanel" aria-labelledby="today-tab"><div class="grid two"><article class="card"><div class="card-head"><div><h2>Today’s next steps</h2><p class="subtle">Auto-planned from your timetable, exams, and deadlines.</p></div><div style="display:flex; gap:8px; align-items:center;"><button class="button primary small" id="today-regenerate-btn">Regenerate today's plan</button><button class="button small" id="today-add-task-btn">+ Add task</button></div></div><ul class="list" id="task-list"></ul></article><aside class="card"><h2>Build a dependable habit</h2><p class="subtle" style="margin-top:8px">Start with the closest deadline. If a task is too large, add a smaller 30–60 minute step instead.</p><div class="notice" style="margin:16px 0 0">StudyOS is a planning aid, not an official record. Confirm attendance and exam rules with your institution.</div></aside></div></section>
 
     <section class="panel" id="classroom-panel" role="tabpanel" aria-labelledby="classroom-tab">
       <div class="grid two">
@@ -508,20 +509,64 @@
       });
     }
 
+    function renderTodayPlan(todayPlan) {
+      const taskList = $('#task-list');
+      if (!taskList) return;
+
+      if (!todayPlan || !todayPlan.has_timetable) {
+        taskList.innerHTML = `
+          <div class="empty" style="padding:24px 16px; text-align:center;">
+            <div style="font-weight:600; font-size:1rem; margin-bottom:6px; color:var(--ink);">No timetable uploaded yet.</div>
+            <div class="subtle" style="margin-bottom:14px;">Upload your timetable image to auto-generate your daily schedule & study plan.</div>
+            <button class="button primary small" onclick="openUpload('timetable')">Upload timetable image</button>
+          </div>`;
+        return;
+      }
+
+      const slots = todayPlan.slots || [];
+      if (!slots.length) {
+        taskList.innerHTML = `<div class="empty">No free slot suggestions available for today.</div>`;
+        return;
+      }
+
+      taskList.innerHTML = slots.map(slot => {
+        const timeRange = escapeHtml(slot.time_range || '');
+        const title = escapeHtml(slot.suggestion_text || '');
+        const type = escapeHtml(slot.suggestion_type || 'Suggestion');
+        const sourceRef = escapeHtml(slot.source_ref || '');
+        const taskId = slot.task_id;
+
+        return `
+          <li class="item" style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid var(--line);">
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-weight:600; font-size:0.95rem; color:var(--ink);">${title}</span>
+                <span class="tag-dashed">${type}</span>
+              </div>
+              <div class="subtle" style="font-size:0.8rem; margin-top:4px; line-height:1.4;">
+                🕒 ${timeRange} ${sourceRef ? `· <span style="opacity:0.85;">${sourceRef}</span>` : ''}
+              </div>
+            </div>
+            ${taskId ? `<button class="button small" data-complete-today="${taskId}">Done</button>` : ''}
+          </li>
+        `;
+      }).join('');
+
+      document.querySelectorAll('[data-complete-today]').forEach(btn => {
+        btn.onclick = () => completeTask(btn.dataset.completeToday);
+      });
+    }
+
     function render() {
       const d = state.data;
       if (!d) return;
       const profName = $('#profile-name'); if (profName) profName.textContent = d.profile?.name ? `${d.profile.name} · ${d.profile.institution}` : 'Your academic week, in control';
       const setupNotice = $('#setup-notice'); if (setupNotice) setupNotice.hidden = !d.needs_onboarding;
-      const urgentCount = $('#urgent-count'); if (urgentCount) urgentCount.textContent = d.urgent_tasks.length;
-      const riskCount = $('#risk-count'); if (riskCount) riskCount.textContent = d.courses.filter(c => c.percentage < c.attendance_threshold).length;
+      const urgentCount = $('#urgent-count'); if (urgentCount) urgentCount.textContent = (d.urgent_tasks || []).length;
+      const riskCount = $('#risk-count'); if (riskCount) riskCount.textContent = (d.courses || []).filter(c => c.percentage < c.attendance_threshold).length;
       const todayDate = $('#today-date'); if (todayDate) todayDate.textContent = d.today;
-      
-      const open = d.tasks.filter(t => t.status === 'pending').slice(0, 5);
-      const taskList = $('#task-list');
-      if (taskList) {
-        taskList.innerHTML = open.length ? open.map(t => `<li class="item"><div><div class="item-title">${escapeHtml(t.title)}</div><div class="item-meta">${escapeHtml(t.course || 'General')} · ${dueText(t.due_at)} · ${t.estimate_minutes} min</div></div><div class="task-actions"><button class="button small" data-complete="${t.id}">Complete</button></div></li>`).join('') : '<li class="empty">No open tasks yet. Add one small, useful next step.</li>';
-      }
+
+      renderTodayPlan(d.today_plan);
       
       const courseList = $('#course-list');
       if (courseList) {
@@ -530,8 +575,6 @@
           return `<div class="item course"><div><div class="item-title">${escapeHtml(c.name)}</div><div class="bar ${cls === 'good' ? '' : cls === 'warn' ? 'watch' : 'low'}"><span style="width:${Math.min(c.percentage, 100)}%"></span></div><div class="item-meta">${c.attended_classes}/${c.conducted_classes} attended · threshold ${c.attendance_threshold}%</div></div><strong>${c.percentage}%</strong><span class="pill ${cls}">${cls === 'good' ? 'On track' : c.classes_needed ? `Attend next ${c.classes_needed}` : 'Needs review'}</span></div>`;
         }).join('') : '<div class="empty">Import your attendance CSV to see a clear course-by-course view.</div>';
       }
-
-      document.querySelectorAll('[data-complete]').forEach(button => button.onclick = () => completeTask(button.dataset.complete));
 
       renderExamsAndProjection();
       renderClassroomTab();
@@ -544,6 +587,14 @@
         await request(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'completed' }) });
         await load();
         toast('Task completed. Nice work.');
+      } catch (e) { toast(e.message); }
+    }
+
+    async function deleteTask(id) {
+      try {
+        await request(`/api/tasks/${id}`, { method: 'DELETE' });
+        await load();
+        toast('Task removed.');
       } catch (e) { toast(e.message); }
     }
 
@@ -588,6 +639,19 @@
       const submitBtn = $('#upload-submit'); if (submitBtn) submitBtn.textContent = timetable ? 'Analyse timetable' : 'Analyse attendance';
       uploadDialog.showModal();
     }
+
+    async function regenerateTodayPlan() {
+      try {
+        const res = await request('/api/today-plan');
+        if (state.data) state.data.today_plan = res.today_plan;
+        renderTodayPlan(res.today_plan);
+        toast("Today's plan regenerated based on your timetable & exams.");
+      } catch (err) { toast(err.message); }
+    }
+
+    const regTodayBtn = $('#regenerate-today-button'); if (regTodayBtn) regTodayBtn.onclick = regenerateTodayPlan;
+    const todayRegBtn = $('#today-regenerate-btn'); if (todayRegBtn) todayRegBtn.onclick = regenerateTodayPlan;
+    const todayAddBtn = $('#today-add-task-btn'); if (todayAddBtn) todayAddBtn.onclick = () => $('#task-dialog')?.showModal();
 
     const setupBtn = $('#setup-button'); if (setupBtn) setupBtn.onclick = openProfile;
     const acadBtn = $('#academic-setup-btn'); if (acadBtn) acadBtn.onclick = openProfile;

@@ -53,9 +53,9 @@ def index():
 @app.get("/api/bootstrap")
 def bootstrap():
     profile = store.get_profile()
-    tasks = store.tasks()
+    tasks = store.tasks(status="pending")
     courses = store.courses()
-    urgent = [task for task in tasks if task["status"] == "pending" and task["due_at"] and task["due_at"][:10] <= (date.today() + timedelta(days=3)).isoformat()]
+    urgent = [task for task in tasks if task["due_at"] and task["due_at"][:10] <= (date.today() + timedelta(days=3)).isoformat()]
     today_plan = FreeSlotPlanner.suggest_free_slots(store, today_iso())
     exams = store.get_exams()
     acad_proj = store.calculate_academic_attendance_projection()
@@ -65,6 +65,13 @@ def bootstrap():
         "urgent_tasks": urgent, "today": today_iso(), "today_plan": today_plan,
         "exams": exams, "academic_projection": acad_proj,
     })
+
+
+@app.route("/api/today-plan", methods=["GET", "POST"])
+def today_plan_endpoint():
+    target = (request.get_json(silent=True) or {}).get("date", today_iso())
+    plan = FreeSlotPlanner.suggest_free_slots(store, target)
+    return jsonify({"success": True, "today_plan": plan, "date": target})
 
 
 @app.get("/api/exams")
@@ -327,11 +334,18 @@ def update_attendance(course_id):
         return api_error(str(exc))
 
 
+@app.get("/api/tasks")
+def get_tasks():
+    status = request.args.get("status", "pending")
+    st_val = None if status == "all" else status
+    return jsonify({"success": True, "tasks": store.tasks(status=st_val)})
+
+
 @app.post("/api/tasks")
 def add_task():
     try:
         task = store.add_task(request.get_json(silent=True) or {})
-        return jsonify({"success": True, "task": task}), 201
+        return jsonify({"success": True, "task": task, "tasks": store.tasks(status="pending")}), 201
     except (TypeError, ValueError) as exc:
         return api_error(str(exc))
 
@@ -340,9 +354,15 @@ def add_task():
 def update_task(task_id):
     try:
         store.update_task(task_id, (request.get_json(silent=True) or {}).get("status", ""))
-        return jsonify({"success": True, "tasks": store.tasks()})
+        return jsonify({"success": True, "tasks": store.tasks(status="pending")})
     except ValueError as exc:
         return api_error(str(exc), 404 if "not found" in str(exc).lower() else 400)
+
+
+@app.delete("/api/tasks/<task_id>")
+def delete_task(task_id):
+    store.delete_task(task_id)
+    return jsonify({"success": True, "tasks": store.tasks(status="pending")})
 
 
 @app.post("/api/generate-plan")

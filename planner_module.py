@@ -588,13 +588,38 @@ class FreeSlotPlanner:
 
         pending_tasks = store.tasks("pending")
         courses = store.courses()
+        db_exams = store.get_exams() if hasattr(store, "get_exams") else []
 
         upcoming_exams = []
-        regular_tasks = []
+        seen_exam_courses = set()
 
+        # 1. Check exams table first
+        for ex in db_exams:
+            ex_date_str = ex.get("exam_date", "")
+            if ex_date_str:
+                try:
+                    ex_dt = datetime.strptime(ex_date_str[:10], "%Y-%m-%d").date()
+                    days = (ex_dt - target_dt).days
+                    if 0 <= days <= 7:
+                        course_name = ex.get("course") or ex.get("title") or "Exam"
+                        days_text = "today" if days == 0 else f"in {days} day{'s' if days > 1 else ''}"
+                        upcoming_exams.append({
+                            "suggestion_text": f"Revision: {course_name}",
+                            "suggestion_type": "Exam prep",
+                            "source_ref": f"{course_name} exam {days_text}",
+                            "days_until": max(0, days),
+                            "weight": 1.0 / (max(0, days) + 1.0),
+                            "course": course_name,
+                            "task_id": None
+                        })
+                        seen_exam_courses.add(course_name.lower())
+                except Exception:
+                    pass
+
+        # 2. Check pending tasks for exams/revisions
+        regular_tasks = []
         for task in pending_tasks:
             due_at = task.get("due_at")
-            is_exam = False
             days_until = None
             if due_at:
                 try:
@@ -605,45 +630,69 @@ class FreeSlotPlanner:
 
             title_lower = (task.get("title") or "").lower()
             source_lower = (task.get("source_ref") or "").lower()
-            if "exam" in title_lower or "exam" in source_lower or "midterm" in title_lower or "datesheet" in source_lower:
-                is_exam = True
+            course_name = task.get("course") or "General"
+            is_exam = bool("exam" in title_lower or "midterm" in title_lower or "datesheet" in source_lower)
 
-            if is_exam or (days_until is not None and 0 <= days_until <= 7 and ("revision" in title_lower or "exam" in title_lower or "datesheet" in source_lower)):
+            if (is_exam or (days_until is not None and 0 <= days_until <= 7 and "revision" in title_lower)) and course_name.lower() not in seen_exam_courses:
+                days = max(0, days_until) if days_until is not None else 7
+                days_text = "today" if days == 0 else f"in {days} day{'s' if days > 1 else ''}"
                 upcoming_exams.append({
-                    "task": task,
-                    "days_until": max(0, days_until) if days_until is not None else 7,
-                    "course": task.get("course") or "General"
+                    "suggestion_text": f"Revision: {course_name}",
+                    "suggestion_type": "Exam prep",
+                    "source_ref": f"{course_name} exam {days_text}",
+                    "days_until": days,
+                    "weight": 1.0 / (days + 1.0),
+                    "course": course_name,
+                    "task_id": task.get("id")
                 })
+                seen_exam_courses.add(course_name.lower())
             else:
                 regular_tasks.append(task)
 
-        upcoming_exams.sort(key=lambda x: x["days_until"])
+        # Sort exams by days_until ascending (tighter gap dominates top of schedule)
+        upcoming_exams.sort(key=lambda x: (x["days_until"], -x["weight"]))
+        regular_tasks.sort(key=lambda t: t.get("due_at") or "9999-12-31")
 
         slots = []
+        exam_slot_pool = []
+
+        # Lead with upcoming exams sorted by days_until ascending
+        if upcoming_exams:
+            total_slots = len(free_time_blocks)
+            if len(upcoming_exams) == 1:
+                # Single exam takes top slot while leaving room for regular tasks & revision
+                alloc_count = 1 if (regular_tasks or courses) else min(total_slots, 2)
+                for _ in range(alloc_count):
+                    exam_slot_pool.append(upcoming_exams[0])
+            else:
+                total_weight = sum(e["weight"] for e in upcoming_exams)
+                for ex in upcoming_exams:
+                    alloc_count = max(1, min(2, int(round((ex["weight"] / total_weight) * total_slots))))
+                    for _ in range(alloc_count):
+                        if len(exam_slot_pool) < total_slots - (1 if regular_tasks else 0):
+                            exam_slot_pool.append(ex)
 
         for idx, (start_m, end_m) in enumerate(free_time_blocks):
             start_str = f"{start_m // 60:02d}:{start_m % 60:02d}"
             end_str = f"{end_m // 60:02d}:{end_m % 60:02d}"
             time_range = f"{start_str} - {end_str}"
 
-            if idx < len(upcoming_exams):
-                exam_info = upcoming_exams[idx]
-                t = exam_info["task"]
-                days = exam_info["days_until"]
-                days_text = "today" if days == 0 else f"in {days} day{'s' if days > 1 else ''}"
-                course_name = t.get("course") or "Exam"
+            # 1. Exam prep slots lead first
+            if idx < len(exam_slot_pool):
+                ex = exam_slot_pool[idx]
                 slots.append({
                     "time_range": time_range,
                     "start_minutes": start_m,
-                    "suggestion_text": f"Revision: {course_name}",
-                    "suggestion_type": "Exam prep",
-                    "source_ref": f"{course_name} exam {days_text}",
-                    "course": course_name,
-                    "task_id": t.get("id")
+                    "suggestion_text": ex["suggestion_text"],
+                    "suggestion_type": ex["suggestion_type"],
+                    "source_ref": ex["source_ref"],
+                    "course": ex["course"],
+                    "task_id": ex["task_id"]
                 })
                 continue
 
-            reg_idx = idx - len(upcoming_exams)
+            # 2. Regular tasks (assignments, manual tasks)
+            reg_idx = idx - len(exam_slot_pool)
             if reg_idx < len(regular_tasks):
                 t = regular_tasks[reg_idx]
                 due_info = f"Due {t['due_at'][:10]}" if t.get("due_at") else "Added by student"
@@ -658,6 +707,7 @@ class FreeSlotPlanner:
                 })
                 continue
 
+            # 3. Fallback: Attendance-based revision (weekdays) or Buffer (weekends)
             if is_weekend:
                 slots.append({
                     "time_range": time_range,
