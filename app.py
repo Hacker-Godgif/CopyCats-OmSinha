@@ -82,6 +82,8 @@ def bootstrap():
         "recent_imports": store.recent_imports(), "timetable": store.timetable(), "needs_onboarding": not bool(profile and profile["institution"]),
         "urgent_tasks": urgent, "today": today_iso(), "today_plan": today_plan,
         "exams": exams, "academic_projection": acad_proj,
+        "google_authenticated": bool(session.get("google_access_token")),
+        "google_user_email": session.get("google_user_email"),
         "user": {"id": current_user["id"], "email": current_user["email"], "name": current_user["name"], "auth_provider": current_user.get("auth_provider", "email")} if current_user else None
     })
 

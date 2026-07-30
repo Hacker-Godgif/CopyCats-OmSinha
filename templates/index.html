@@ -160,6 +160,18 @@
     <section aria-labelledby="home-title"><div class="eyebrow">Student workspace</div><h1 id="home-title">Make your next academic move clear.</h1><p class="lede">Upload your timetable or attendance screenshot. AI extracts details, tracks academic duration & exam dates, and calculates your exact bunk allowance.</p><div class="top-actions"><button class="button primary" id="regenerate-today-button">Regenerate today's plan</button><button class="button" id="add-task-button">Add a task</button><button class="button" id="sync-classroom-button">Sync Google Classroom</button><button class="button" id="import-button">Upload timetable image</button><a class="button" href="/api/calendar.ics">Export deadlines</a></div></section>
     <div id="setup-notice" class="notice" hidden><strong>Complete your setup.</strong> Add your college, study time, and academic duration before relying on a plan. <button class="button small" id="setup-button">Set up now</button></div>
     <div id="app-notice" class="notice" hidden aria-live="polite"></div>
+    <div id="classroom-link-notice" class="notice" style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, rgba(66,133,244,0.12), rgba(52,168,83,0.12)); border:1px solid rgba(66,133,244,0.35); padding:14px 18px; border-radius:12px; margin-bottom:16px; flex-wrap:wrap; gap:12px;" hidden>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="font-size:1.5rem;">📚</span>
+        <div>
+          <strong style="color:var(--ink); font-size:0.95rem;">Link your Google Classroom account</strong>
+          <p class="subtle" style="margin:2px 0 0; font-size:0.83rem;">Connect Google Classroom to automatically import assignments, quizzes, and deadlines into your daily schedule.</p>
+        </div>
+      </div>
+      <button class="button primary small" onclick="triggerGoogleClassroomLink()" style="background:#4285F4; border-color:#4285F4; white-space:nowrap; font-weight:600; padding:8px 16px;">
+        Connect Google Classroom
+      </button>
+    </div>
     <section class="grid stats" aria-label="Your study overview"><article class="card"><div class="subtle">Tasks due soon</div><div class="metric" id="urgent-count">0</div><div class="subtle">within the next 3 days</div></article><article class="card"><div class="subtle">Attendance to watch</div><div class="metric" id="risk-count">0</div><div class="subtle">courses below your threshold</div></article><article class="card"><div class="subtle">Scheduled Exams</div><div class="metric" id="exams-count">0</div><div class="subtle">exam dates in database</div></article></section>
     
     <nav class="tabs" aria-label="StudyOS sections" role="tablist">
@@ -318,8 +330,12 @@
     <div class="modal" style="max-width:440px; border-radius:16px;">
       <header style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:16px;">
         <h2 id="auth-modal-title" style="font-size:1.15rem; font-weight:700; margin:0;">Student Login & Sign Up</h2>
-        <button class="button small" onclick="$('#auth-dialog').close()" style="border:none; background:transparent; font-size:1.2rem; cursor:pointer; padding:2px 8px;">✕</button>
+        <button class="button small" id="auth-dialog-close-btn" onclick="$('#auth-dialog').close()" style="border:none; background:transparent; font-size:1.2rem; cursor:pointer; padding:2px 8px;">✕</button>
       </header>
+
+      <div id="auth-gate-notice" class="notice" style="margin-bottom:14px; font-size:0.85rem; background:var(--card); font-weight:500;" hidden>
+        🔒 <strong>Authentication Required:</strong> Please sign in or create an account to access your StudyOS workspace.
+      </div>
 
       <div style="margin-bottom:16px;">
         <button id="auth-google-btn" class="button" style="width:100%; display:flex; justify-content:center; align-items:center; gap:10px; padding:10px; border:1px solid var(--line); border-radius:8px; font-weight:600; cursor:pointer; background:var(--card); color:var(--ink);">
@@ -640,6 +656,35 @@
       renderExamsAndProjection();
       renderClassroomTab();
       renderUser(d.user);
+
+      // Mandatory Login Gate check
+      const authDialog = $('#auth-dialog');
+      const authNotice = $('#auth-gate-notice');
+      if (!d.user) {
+        if (authDialog && !authDialog.open) {
+          authDialog.showModal();
+        }
+        if (authNotice) authNotice.hidden = false;
+      } else {
+        if (authNotice) authNotice.hidden = true;
+      }
+
+      // Google Classroom Link Notice check
+      const gcNotice = $('#classroom-link-notice');
+      if (gcNotice) {
+        gcNotice.hidden = !d.user || Boolean(d.google_authenticated);
+      }
+    }
+
+    async function triggerGoogleClassroomLink() {
+      try {
+        const res = await request('/api/auth/google/login');
+        if (res.configured && res.login_url) {
+          window.location.href = res.login_url;
+        } else {
+          toast(res.message || 'Google OAuth is not configured yet.');
+        }
+      } catch (err) { toast(err.message); }
     }
 
     function renderUser(user) {
