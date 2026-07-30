@@ -183,7 +183,7 @@ def google_logout():
 @app.get("/api/auth/google/login")
 def google_login():
     from classroom_importer import GoogleAuthManager
-    redirect_uri = url_for("google_callback", _external=True)
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "").strip() or url_for("google_callback", _external=True)
     client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
     if not client_id:
         return jsonify({
@@ -193,7 +193,7 @@ def google_login():
             "message": "GOOGLE_CLIENT_ID is not configured in .env file yet."
         })
     login_url = GoogleAuthManager.get_login_url(redirect_uri)
-    return jsonify({"success": True, "configured": True, "login_url": login_url})
+    return jsonify({"success": True, "configured": True, "login_url": login_url, "redirect_uri": redirect_uri})
 
 
 @app.get("/api/auth/google/callback")
@@ -202,7 +202,7 @@ def google_callback():
     code = request.args.get("code")
     if not code:
         return redirect("/?error=missing_code")
-    redirect_uri = url_for("google_callback", _external=True)
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "").strip() or url_for("google_callback", _external=True)
     try:
         tokens = GoogleAuthManager.exchange_code_for_tokens(code, redirect_uri)
         access_token = tokens.get("access_token")
