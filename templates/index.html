@@ -6,26 +6,142 @@
   <meta name="description" content="StudyOS India helps college students organise deadlines, attendance, and exam preparation.">
   <title>StudyOS India — your academic week, in control</title>
   <style>
-    :root { --ink:#172033; --muted:#5d687a; --line:#dbe2ed; --canvas:#f5f7fb; --card:#fff; --brand:#3159d9; --brand-dark:#2346b7; --danger:#b42318; --warn:#a15c00; --good:#087443; --radius:14px; }
-    * { box-sizing:border-box; } body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; } button,input,select,textarea { font:inherit; } button { cursor:pointer; } button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:3px solid #8ba6ff; outline-offset:2px; }
-    .skip { position:absolute; top:-4rem; left:1rem; background:#fff; padding:.55rem .8rem; z-index:10; } .skip:focus { top:1rem; }
-    header { height:64px; display:flex; align-items:center; justify-content:space-between; padding:0 clamp(16px,4vw,48px); background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:3; } .brand { font-weight:800; letter-spacing:-.04em; font-size:1.2rem; } .brand span { color:var(--brand); } .profile-name { color:var(--muted); font-size:.9rem; }
-    main { max-width:1120px; margin:0 auto; padding:28px clamp(16px,4vw,36px) 56px; } .eyebrow { color:var(--brand); font-weight:750; font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; } h1 { font-size:clamp(1.7rem,4vw,2.5rem); line-height:1.12; margin:.25rem 0 .5rem; letter-spacing:-.045em; } h2 { font-size:1.12rem; margin:0; letter-spacing:-.02em; } p { margin:.3rem 0; } .lede { color:var(--muted); max-width:700px; }
-    .top-actions,.actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; } .top-actions { margin-top:20px; } .button { border:1px solid var(--line); background:#fff; color:var(--ink); font-weight:700; padding:.65rem .9rem; border-radius:10px; } .button:hover { border-color:#aebbd0; } .button.primary { background:var(--brand); color:#fff; border-color:var(--brand); } .button.primary:hover { background:var(--brand-dark); } .button.danger { color:var(--danger); } .button.small { padding:.4rem .65rem; font-size:.85rem; }
-    .notice { margin:20px 0; padding:12px 14px; background:#fff8e6; border:1px solid #f1d48a; border-radius:10px; color:#654900; } .notice strong { color:#543900; }
-    .grid { display:grid; gap:16px; margin-top:24px; } .stats { grid-template-columns:repeat(3,1fr); } .two { grid-template-columns:1.25fr .75fr; } .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:0 1px 2px #14213d08; } .card-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:13px; }
-    .metric { font-size:1.75rem; font-weight:800; letter-spacing:-.04em; margin-top:8px; } .subtle { color:var(--muted); font-size:.88rem; } .pill { display:inline-flex; align-items:center; border-radius:99px; padding:.2rem .55rem; font-size:.76rem; font-weight:750; background:#edf1ff; color:#2449b9; } .pill.good { background:#e8f7ef; color:var(--good); } .pill.warn { background:#fff3df; color:var(--warn); } .pill.danger { background:#ffebe9; color:var(--danger); }
-    .list { list-style:none; padding:0; margin:0; } .item { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-top:1px solid var(--line); } .item:first-child { border-top:0; } .item-title { font-weight:700; } .item-meta { color:var(--muted); font-size:.84rem; margin-top:2px; } .empty { text-align:center; padding:24px 10px; color:var(--muted); } .task-actions { flex:none; display:flex; align-items:center; gap:8px; }
-    .course { display:grid; grid-template-columns:minmax(100px,1fr) 70px 120px; gap:12px; align-items:center; } .bar { height:8px; overflow:hidden; background:#e8edf5; border-radius:99px; margin-top:5px; } .bar > span { height:100%; display:block; background:var(--good); border-radius:inherit; } .bar.low > span { background:var(--danger); } .bar.watch > span { background:#d48300; }
-    .tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin-top:24px; overflow:auto; } .tab { border:0; border-bottom:3px solid transparent; background:transparent; padding:11px 12px; color:var(--muted); font-weight:700; white-space:nowrap; } .tab[aria-selected="true"] { color:var(--brand); border-bottom-color:var(--brand); } .panel { display:none; } .panel.active { display:block; }
-    label { display:block; font-weight:700; font-size:.9rem; margin:0 0 5px; } input,textarea,select { width:100%; border:1px solid #b7c2d3; border-radius:9px; padding:.62rem .68rem; color:var(--ink); background:#fff; } textarea { min-height:138px; resize:vertical; } .form-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; } .form-field { margin-bottom:12px; } .help { color:var(--muted); font-size:.82rem; margin-top:4px; } details summary { color:var(--brand); cursor:pointer; font-weight:700; } .citation { font-size:.84rem; background:#f2f5ff; border-left:3px solid var(--brand); padding:9px; margin-top:10px; }
-    dialog { width:min(580px,calc(100% - 32px)); border:0; border-radius:16px; padding:0; box-shadow:0 20px 60px #10182855; } dialog::backdrop { background:#10182888; } .modal { padding:22px; } .modal header { position:static; height:auto; padding:0 0 12px; background:none; } .modal footer { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; } #toast { position:fixed; right:16px; bottom:16px; max-width:350px; padding:12px 14px; border-radius:10px; background:#172033; color:#fff; box-shadow:0 8px 30px #10182844; z-index:5; } #toast[hidden] { display:none; }
+    :root {
+      --ink: #1e293b;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --canvas: #f8fafc;
+      --card: #ffffff;
+      --header-bg: #ffffff;
+      --brand: #3159d9;
+      --brand-dark: #2346b7;
+      --danger: #b42318;
+      --warn: #a15c00;
+      --good: #087443;
+      --notice-bg: #fff8e6;
+      --notice-border: #f1d48a;
+      --notice-ink: #654900;
+      --citation-bg: #f2f5ff;
+      --modal-backdrop: rgba(16, 24, 40, 0.53);
+      --input-bg: #ffffff;
+      --input-border: #b7c2d3;
+      --radius: 14px;
+      --shadow: 0 1px 3px rgba(20, 33, 61, 0.05);
+    }
+    [data-theme="dark"] {
+      --ink: #f1f5f9;
+      --muted: #94a3b8;
+      --line: #1e293b;
+      --canvas: #0b0f17;
+      --card: #131b2e;
+      --header-bg: #131b2e;
+      --brand: #5882ff;
+      --brand-dark: #3f6bf3;
+      --danger: #f87171;
+      --warn: #fbbf24;
+      --good: #34d399;
+      --notice-bg: #1c180b;
+      --notice-border: #4d3a08;
+      --notice-ink: #fef08a;
+      --citation-bg: #1a2542;
+      --modal-backdrop: rgba(0, 0, 0, 0.75);
+      --input-bg: #0b0f17;
+      --input-border: #2c384e;
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; transition:background-color 0.25s ease, color 0.25s ease; }
+    button,input,select,textarea { font:inherit; }
+    button { cursor:pointer; }
+    button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:3px solid #8ba6ff; outline-offset:2px; }
+    .skip { position:absolute; top:-4rem; left:1rem; background:var(--card); color:var(--ink); padding:.55rem .8rem; z-index:10; }
+    .skip:focus { top:1rem; }
+    header { height:64px; display:flex; align-items:center; justify-content:space-between; padding:0 clamp(16px,4vw,48px); background:var(--header-bg); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:3; transition:background-color 0.25s ease, border-color 0.25s ease; }
+    .brand { font-weight:800; letter-spacing:-.04em; font-size:1.2rem; }
+    .brand span { color:var(--brand); }
+    .header-right { display:flex; align-items:center; gap:16px; }
+    .profile-name { color:var(--muted); font-size:.9rem; }
+    .theme-toggle { display:inline-flex; align-items:center; gap:6px; background:var(--canvas); border:1px solid var(--line); color:var(--ink); padding:6px 12px; border-radius:99px; font-weight:700; font-size:.85rem; transition:all 0.2s ease; }
+    .theme-toggle:hover { border-color:var(--brand); }
+    main { max-width:1120px; margin:0 auto; padding:28px clamp(16px,4vw,36px) 56px; }
+    .eyebrow { color:var(--brand); font-weight:750; font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; }
+    h1 { font-size:clamp(1.7rem,4vw,2.5rem); line-height:1.12; margin:.25rem 0 .5rem; letter-spacing:-.045em; }
+    h2 { font-size:1.12rem; margin:0; letter-spacing:-.02em; }
+    p { margin:.3rem 0; }
+    .lede { color:var(--muted); max-width:700px; }
+    .top-actions,.actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .top-actions { margin-top:20px; }
+    .button { border:1px solid var(--line); background:var(--card); color:var(--ink); font-weight:700; padding:.65rem .9rem; border-radius:10px; transition:background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+    .button:hover { border-color:var(--brand); }
+    .button.primary { background:var(--brand); color:#fff; border-color:var(--brand); }
+    .button.primary:hover { background:var(--brand-dark); }
+    .button.danger { color:var(--danger); }
+    .button.small { padding:.4rem .65rem; font-size:.85rem; }
+    .notice { margin:20px 0; padding:12px 14px; background:var(--notice-bg); border:1px solid var(--notice-border); border-radius:10px; color:var(--notice-ink); }
+    .notice strong { color:inherit; }
+    .grid { display:grid; gap:16px; margin-top:24px; }
+    .stats { grid-template-columns:repeat(3,1fr); }
+    .two { grid-template-columns:1.25fr .75fr; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); transition:background-color 0.25s ease, border-color 0.25s ease; }
+    .card-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:13px; }
+    .metric { font-size:1.75rem; font-weight:800; letter-spacing:-.04em; margin-top:8px; }
+    .subtle { color:var(--muted); font-size:.88rem; }
+    .pill { display:inline-flex; align-items:center; border-radius:99px; padding:.2rem .55rem; font-size:.76rem; font-weight:750; background:#edf1ff; color:#2449b9; }
+    [data-theme="dark"] .pill { background:#1e2a4a; color:#7ca3ff; }
+    .pill.good { background:#e8f7ef; color:var(--good); }
+    [data-theme="dark"] .pill.good { background:#0f2e21; color:#4ade80; }
+    .pill.warn { background:#fff3df; color:var(--warn); }
+    [data-theme="dark"] .pill.warn { background:#2e220f; color:#fcd34d; }
+    .pill.danger { background:#ffebe9; color:var(--danger); }
+    [data-theme="dark"] .pill.danger { background:#3b181a; color:#fca5a5; }
+    .list { list-style:none; padding:0; margin:0; }
+    .item { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-top:1px solid var(--line); }
+    .item:first-child { border-top:0; }
+    .item-title { font-weight:700; }
+    .item-meta { color:var(--muted); font-size:.84rem; margin-top:2px; }
+    .empty { text-align:center; padding:24px 10px; color:var(--muted); }
+    .task-actions { flex:none; display:flex; align-items:center; gap:8px; }
+    .course { display:grid; grid-template-columns:minmax(100px,1fr) 70px 120px; gap:12px; align-items:center; }
+    .bar { height:8px; overflow:hidden; background:var(--line); border-radius:99px; margin-top:5px; }
+    .bar > span { height:100%; display:block; background:var(--good); border-radius:inherit; }
+    .bar.low > span { background:var(--danger); }
+    .bar.watch > span { background:var(--warn); }
+    .tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin-top:24px; overflow:auto; }
+    .tab { border:0; border-bottom:3px solid transparent; background:transparent; padding:11px 12px; color:var(--muted); font-weight:700; white-space:nowrap; }
+    .tab[aria-selected="true"] { color:var(--brand); border-bottom-color:var(--brand); }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    label { display:block; font-weight:700; font-size:.9rem; margin:0 0 5px; }
+    input,textarea,select { width:100%; border:1px solid var(--input-border); border-radius:99px; padding:.62rem .98rem; color:var(--ink); background:var(--input-bg); transition:background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+    input,textarea,select { border-radius:9px; }
+    textarea { min-height:138px; resize:vertical; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .form-field { margin-bottom:12px; }
+    .help { color:var(--muted); font-size:.82rem; margin-top:4px; }
+    details summary { color:var(--brand); cursor:pointer; font-weight:700; }
+    .citation { font-size:.84rem; background:var(--citation-bg); border-left:3px solid var(--brand); padding:9px; margin-top:10px; border-radius:0 6px 6px 0; }
+    dialog { width:min(580px,calc(100% - 32px)); border:1px solid var(--line); border-radius:16px; padding:0; background:var(--card); color:var(--ink); box-shadow:var(--shadow); }
+    dialog::backdrop { background:var(--modal-backdrop); }
+    .modal { padding:22px; }
+    .modal header { position:static; height:auto; padding:0 0 12px; background:none; }
+    .modal footer { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+    #toast { position:fixed; right:16px; bottom:16px; max-width:350px; padding:12px 14px; border-radius:10px; background:#172033; color:#fff; box-shadow:0 8px 30px #10182844; z-index:5; }
+    [data-theme="dark"] #toast { background:#1e293b; color:#f8fafc; border:1px solid #334155; }
+    #toast[hidden] { display:none; }
     @media(max-width:700px) { header { height:58px; } .profile-name { display:none; } main { padding-top:20px; } .stats,.two { grid-template-columns:1fr; } .course { grid-template-columns:1fr 58px; } .course .pill { grid-column:1/-1; justify-self:start; } .form-grid { grid-template-columns:1fr; } .top-actions .button { flex:1; text-align:center; } }
   </style>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <header><div class="brand">Study<span>OS</span> India</div><div class="profile-name" id="profile-name">Your academic week, in control</div></header>
+  <header>
+    <div class="brand">Study<span>OS</span> India</div>
+    <div class="header-right">
+      <div class="profile-name" id="profile-name">Your academic week, in control</div>
+      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark theme">
+        <span id="theme-icon">🌙</span> <span id="theme-text">Dark</span>
+      </button>
+    </div>
+  </header>
   <main id="content">
     <section aria-labelledby="home-title"><div class="eyebrow">Student workspace</div><h1 id="home-title">Make your next academic move clear.</h1><p class="lede">Upload your timetable or attendance screenshot. AI extracts the details, then StudyOS plans your week and checks whether a holiday will put any course at risk.</p><div class="top-actions"><button class="button primary" id="add-task-button">Add a task</button><button class="button" id="import-button">Upload timetable image</button><a class="button" href="/api/calendar.ics">Export deadlines</a></div></section>
     <div id="setup-notice" class="notice" hidden><strong>Complete your setup.</strong> Add your college and study time before relying on a plan. <button class="button small" id="setup-button">Set up now</button></div>
@@ -45,6 +161,27 @@
     const state = { data:null };
     const $ = s => document.querySelector(s);
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    
+    // Theme Management
+    function initTheme() {
+      const saved = localStorage.getItem('studyos-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = saved ? saved === 'dark' : prefersDark;
+      setTheme(isDark ? 'dark' : 'light');
+    }
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('studyos-theme', theme);
+      const isDark = theme === 'dark';
+      $('#theme-icon').textContent = isDark ? '☀️' : '🌙';
+      $('#theme-text').textContent = isDark ? 'Light' : 'Dark';
+    }
+    $('#theme-toggle').onclick = () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      setTheme(current === 'light' ? 'dark' : 'light');
+    };
+    initTheme();
+
     function toast(message) { const el=$('#toast'); el.textContent=message; el.hidden=false; clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>el.hidden=true,3600); }
     async function request(url, options={}) { const response=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options}); const data=await response.json(); if(!response.ok || data.success===false) throw new Error(data.error||'Something went wrong.'); return data; }
     function dueText(value) { if(!value) return 'No due date'; const day=value.slice(0,10); const today=new Date().toISOString().slice(0,10); return day===today ? 'Due today' : `Due ${day}`; }
@@ -61,7 +198,7 @@
     $('#profile-form').addEventListener('submit',async e=>{e.preventDefault(); const f=new FormData(e.target);try{await request('/api/profile',{method:'POST',body:JSON.stringify(Object.fromEntries(f))}); $('#profile-dialog').close(); await load(); toast('Your workspace is ready.');}catch(err){toast(err.message);}});
     $('#task-form').addEventListener('submit',async e=>{e.preventDefault();try{await request('/api/tasks',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))}); e.target.reset(); $('#task-minutes').value=60; $('#task-dialog').close(); await load(); toast('Task added to your workspace.');}catch(err){toast(err.message);}});
     $('#upload-form').addEventListener('submit',async e=>{e.preventDefault();const file=$('#image-file').files[0]; if(!file){toast('Choose an image first.');return;} if(file.size>8*1024*1024){toast('Use an image smaller than 8 MB.');return;} const kind=$('#upload-dialog').dataset.kind; const reader=new FileReader(); reader.onload=async()=>{try{const base64=String(reader.result).split(',')[1]; const payload={image_base64:base64,mime_type:file.type,filename:file.name}; if(kind==='attendance') payload.threshold=$('#attendance-threshold').value; $('#upload-submit').disabled=true; $('#upload-submit').textContent='AI is analysing…'; const d=await request(kind==='timetable'?'/api/analyze/timetable-image':'/api/analyze/attendance-image',{method:'POST',body:JSON.stringify(payload)}); $('#upload-dialog').close(); await load(); const review=(d.analysis.uncertainties||[]).length; toast(`${d.analysis.summary||'Image analysed.'}${review?' Review unclear entries before using the result.':''}`); document.querySelector('[data-panel="attendance"]').click(); const hasTt=state.data?.timetable?.length>0, hasCs=state.data?.courses?.length>0; if(hasTt && hasCs){ $('#bunk-result').innerHTML='<div class="citation">Timetable and attendance ready! Choose your holiday dates above and click "Check my holiday".</div>'; } else if(kind==='timetable') { $('#bunk-result').innerHTML='<div class="citation">Timetable saved. Upload attendance next, then choose your holiday dates to check the impact.</div>'; } else if(kind==='attendance') { $('#bunk-result').innerHTML='<div class="citation">Attendance saved. Next, upload your timetable image to enable holiday impact checking.</div>'; }}catch(err){toast(err.message);}finally{$('#upload-submit').disabled=false; $('#upload-submit').textContent=kind==='timetable'?'Analyse timetable':'Analyse attendance';}}; reader.readAsDataURL(file);});
-    $('#bunk-check').onclick=async()=>{const start=$('#holiday-start').value,end=$('#holiday-end').value;if(!start||!end){toast('Choose both holiday dates.');return;}const out=$('#bunk-result');out.innerHTML='<div class="empty">Checking every scheduled class…</div>';try{const d=await request('/api/bunk-check',{method:'POST',body:JSON.stringify({start_date:start,end_date:end})});const r=d.result;out.innerHTML=`<div class="notice" style="background:${r.can_take_holiday?'#e8f7ef':'#ffebe9'};border-color:${r.can_take_holiday?'#92d3ad':'#f3b7b1'};color:${r.can_take_holiday?'#075c35':'#8d1c13'}"><strong>${r.can_take_holiday?'Likely safe for this date range':'Not safe for every course'}</strong><br>${escapeHtml(r.disclaimer)}</div><ul class="list">${r.impacts.map(i=>`<li class="item"><div><div class="item-title">${escapeHtml(i.course)}</div><div class="item-meta">Miss ${i.classes_missed} scheduled class${i.classes_missed===1?'':'es'} · ${i.current_percentage}% → ${i.projected_percentage}%</div></div><span class="pill ${i.safe?'good':'danger'}">${i.safe?'Above threshold':'Below threshold'}</span></li>`).join('')}</ul>`;}catch(err){out.innerHTML=`<div class="notice">${escapeHtml(err.message)}</div>`;}};
+    $('#bunk-check').onclick=async()=>{const start=$('#holiday-start').value,end=$('#holiday-end').value;if(!start||!end){toast('Choose both holiday dates.');return;}const out=$('#bunk-result');out.innerHTML='<div class="empty">Checking every scheduled class…</div>';try{const d=await request('/api/bunk-check',{method:'POST',body:JSON.stringify({start_date:start,end_date:end})});const r=d.result;out.innerHTML=`<div class="notice" style="background:${r.can_take_holiday?'var(--notice-bg)':'#ffebe9'};border-color:${r.can_take_holiday?'var(--notice-border)':'#f3b7b1'};color:${r.can_take_holiday?'var(--notice-ink)':'#8d1c13'}"><strong>${r.can_take_holiday?'Likely safe for this date range':'Not safe for every course'}</strong><br>${escapeHtml(r.disclaimer)}</div><ul class="list">${r.impacts.map(i=>`<li class="item"><div><div class="item-title">${escapeHtml(i.course)}</div><div class="item-meta">Miss ${i.classes_missed} scheduled class${i.classes_missed===1?'':'es'} · ${i.current_percentage}% → ${i.projected_percentage}%</div></div><span class="pill ${i.safe?'good':'danger'}">${i.safe?'Above threshold':'Below threshold'}</span></li>`).join('')}</ul>`;}catch(err){out.innerHTML=`<div class="notice">${escapeHtml(err.message)}</div>`;}};
     $('#generate-plan').onclick=async()=>{const out=$('#plan-output');out.innerHTML='<div class="empty">Creating a realistic week…</div>';try{const d=await request('/api/generate-plan',{method:'POST',body:JSON.stringify({})});out.innerHTML=d.scheduled_slots.length?`<ul class="list">${d.scheduled_slots.map(s=>`<li class="item"><div><div class="item-title">${escapeHtml(s.title)}</div><div class="item-meta">${escapeHtml(s.course)} · ${s.date} · ${s.duration_minutes} min</div></div><span class="pill good">Fits your time</span></li>`).join('')}</ul><p class="citation">${escapeHtml(d.plan_diff.summary)} ${d.verifier.valid?'The schedule passed time and deadline checks.':'Please review the schedule constraints.'}</p>`:'<div class="empty">No pending tasks to plan.</div>';}catch(err){out.innerHTML=`<div class="notice">${escapeHtml(err.message)}</div>`;}};
     $('#ask-help').onclick=async()=>{const q=$('#helpdesk-query').value.trim();if(!q){toast('Type a question first.');return;}const out=$('#helpdesk-output');out.innerHTML='<div class="empty">Checking the available policy sources…</div>';try{const d=await request('/api/helpdesk/query',{method:'POST',body:JSON.stringify({query:q})});const a=d.answer;out.innerHTML=`<p>${escapeHtml(a.answer)}</p>${a.sources?.length?`<div class="citation"><strong>Source:</strong> ${a.sources.map(escapeHtml).join(', ')}</div>`:''}${a.needs_manual_review?'<div class="notice">This needs manual confirmation. Do not rely on it as an official decision.</div>':''}<p class="subtle" style="margin-top:12px">${escapeHtml(d.policy_notice)}</p>`;}catch(err){out.innerHTML=`<div class="notice">${escapeHtml(err.message)}</div>`;}};
     $('#show-policies').onclick=async()=>{const box=$('#policy-list');if(!box.hidden){box.hidden=true;return;}try{const d=await request('/api/policy-sources');box.innerHTML=`<ul class="list" style="margin-top:12px">${d.sources.map(s=>`<li class="item"><div><div class="item-title">${escapeHtml(s.title)}</div><div class="item-meta">${escapeHtml(s.section)} · Updated ${s.updated_at}</div></div></li>`).join('')}</ul>`;box.hidden=false;}catch(e){toast(e.message);}};
