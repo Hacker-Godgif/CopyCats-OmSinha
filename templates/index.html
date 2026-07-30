@@ -146,8 +146,11 @@
   <a class="skip" href="#content">Skip to content</a>
   <header>
     <div class="brand">Study<span>OS</span> India</div>
-    <div class="header-right">
+    <div class="header-right" style="display:flex; align-items:center; gap:12px;">
       <div class="profile-name" id="profile-name">Your academic week, in control</div>
+      <div id="user-badge-container">
+        <button class="button primary small" onclick="$('#auth-dialog').showModal()">Sign In / Register</button>
+      </div>
       <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark theme">
         <span id="theme-icon">🌙</span> <span id="theme-text">Dark</span>
       </button>
@@ -310,6 +313,63 @@
   <dialog id="task-dialog" aria-labelledby="task-title"><form class="modal" id="task-form"><header><div><h2 id="task-title">Add a study task</h2><p class="subtle">Make it small enough to finish in one sitting.</p></div></header><div class="form-field"><label for="task-name">Task</label><input id="task-name" name="title" required placeholder="Finish DBMS assignment outline"></div><div class="form-grid"><div class="form-field"><label for="task-course">Course</label><input id="task-course" name="course" placeholder="DBMS"></div><div class="form-field"><label for="task-due">Due date</label><input id="task-due" name="due_at" type="date"></div></div><div class="form-field"><label for="task-minutes">Estimated minutes</label><input id="task-minutes" name="estimate_minutes" type="number" min="15" max="480" step="15" value="60"></div><footer><button type="button" class="button" id="task-cancel-btn">Cancel</button><button class="button primary" type="submit">Add task</button></footer></form></dialog>
 
   <dialog id="upload-dialog" aria-labelledby="upload-title"><form class="modal" id="upload-form"><header><div><h2 id="upload-title">Upload an image for AI analysis</h2><p class="subtle" id="upload-help">Use a clear timetable image with days, course names, and times.</p></div></header><div class="form-field"><label for="image-file">Image</label><input id="image-file" name="image" type="file" accept="image/png,image/jpeg,image/webp" required><p class="help">PNG, JPG, or WEBP, up to 8 MB. Your image is sent only to the AI provider configured on this device.</p></div><div class="form-field" id="threshold-field" hidden><label for="attendance-threshold">Attendance threshold (%)</label><input id="attendance-threshold" name="threshold" type="number" value="75" min="1" max="100" step="0.5"></div><footer><button type="button" class="button" id="upload-cancel-btn">Cancel</button><button class="button primary" type="submit" id="upload-submit">Analyse image</button></footer></form></dialog>
+
+  <dialog id="auth-dialog" aria-labelledby="auth-modal-title">
+    <div class="modal" style="max-width:440px; border-radius:16px;">
+      <header style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:16px;">
+        <h2 id="auth-modal-title" style="font-size:1.15rem; font-weight:700; margin:0;">Student Login & Sign Up</h2>
+        <button class="button small" onclick="$('#auth-dialog').close()" style="border:none; background:transparent; font-size:1.2rem; cursor:pointer; padding:2px 8px;">✕</button>
+      </header>
+
+      <div style="margin-bottom:16px;">
+        <button id="auth-google-btn" class="button" style="width:100%; display:flex; justify-content:center; align-items:center; gap:10px; padding:10px; border:1px solid var(--line); border-radius:8px; font-weight:600; cursor:pointer; background:var(--card); color:var(--ink);">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.29v3.15C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.29C.47 8.21 0 10.05 0 12s.47 3.79 1.29 5.42l3.99-3.15z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.58l3.99 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/></svg>
+          Sign in with Google
+        </button>
+      </div>
+
+      <div style="display:flex; align-items:center; margin:16px 0; color:var(--muted); font-size:0.78rem; font-weight:600;">
+        <div style="flex:1; height:1px; background:var(--line);"></div>
+        <span style="padding:0 10px;">OR USE EMAIL</span>
+        <div style="flex:1; height:1px; background:var(--line);"></div>
+      </div>
+
+      <div style="display:flex; border-bottom:2px solid var(--line); margin-bottom:16px;">
+        <button id="auth-tab-login" onclick="switchAuthTab('login')" style="flex:1; padding:8px; background:none; border:none; border-bottom:2px solid var(--brand); font-weight:700; cursor:pointer; color:var(--brand);">Sign In</button>
+        <button id="auth-tab-signup" onclick="switchAuthTab('signup')" style="flex:1; padding:8px; background:none; border:none; border-bottom:2px solid transparent; font-weight:600; cursor:pointer; color:var(--muted);">Create Account</button>
+      </div>
+
+      <div id="auth-error" class="notice" style="margin-bottom:14px; font-size:0.85rem; background:rgba(239,68,68,0.1); border-color:#ef4444; color:#ef4444;" hidden></div>
+
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-field" style="margin-bottom:12px;">
+          <label for="login-email" style="font-size:0.85rem; font-weight:600;">Email address</label>
+          <input type="email" id="login-email" required placeholder="you@student.edu" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink);">
+        </div>
+        <div class="form-field" style="margin-bottom:16px;">
+          <label for="login-password" style="font-size:0.85rem; font-weight:600;">Password</label>
+          <input type="password" id="login-password" required placeholder="••••••••" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink);">
+        </div>
+        <button type="submit" id="login-submit-btn" class="button primary" style="width:100%; padding:10px; font-weight:600;">Sign In</button>
+      </form>
+
+      <form id="signup-form" onsubmit="handleSignup(event)" hidden>
+        <div class="form-field" style="margin-bottom:12px;">
+          <label for="signup-name" style="font-size:0.85rem; font-weight:600;">Full name</label>
+          <input type="text" id="signup-name" required placeholder="Ronak Chhabda" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink);">
+        </div>
+        <div class="form-field" style="margin-bottom:12px;">
+          <label for="signup-email" style="font-size:0.85rem; font-weight:600;">Email address</label>
+          <input type="email" id="signup-email" required placeholder="you@student.edu" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink);">
+        </div>
+        <div class="form-field" style="margin-bottom:16px;">
+          <label for="signup-password" style="font-size:0.85rem; font-weight:600;">Create password</label>
+          <input type="password" id="signup-password" required minlength="6" placeholder="At least 6 characters" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink);">
+        </div>
+        <button type="submit" id="signup-submit-btn" class="button primary" style="width:100%; padding:10px; font-weight:600;">Create Account</button>
+      </form>
+    </div>
+  </dialog>
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
 
@@ -579,6 +639,110 @@
 
       renderExamsAndProjection();
       renderClassroomTab();
+      renderUser(d.user);
+    }
+
+    function renderUser(user) {
+      const container = $('#user-badge-container');
+      if (!container) return;
+      if (user) {
+        container.innerHTML = `
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-weight:600; font-size:0.85rem; background:var(--card); padding:5px 12px; border-radius:20px; border:1px solid var(--line); color:var(--ink);">
+              👤 ${escapeHtml(user.name)}
+            </span>
+            <button class="button small" onclick="handleLogout()" style="font-size:0.8rem;">Sign Out</button>
+          </div>`;
+      } else {
+        container.innerHTML = `
+          <button class="button primary small" onclick="$('#auth-dialog').showModal()" style="font-weight:600;">Sign In / Register</button>`;
+      }
+    }
+
+    function switchAuthTab(tab) {
+      const loginTab = $('#auth-tab-login');
+      const signupTab = $('#auth-tab-signup');
+      const loginForm = $('#login-form');
+      const signupForm = $('#signup-form');
+      const authErr = $('#auth-error');
+      if (authErr) authErr.hidden = true;
+
+      if (tab === 'login') {
+        loginTab.style.color = 'var(--brand)';
+        loginTab.style.borderColor = 'var(--brand)';
+        signupTab.style.color = 'var(--muted)';
+        signupTab.style.borderColor = 'transparent';
+        loginForm.hidden = false;
+        signupForm.hidden = true;
+      } else {
+        signupTab.style.color = 'var(--brand)';
+        signupTab.style.borderColor = 'var(--brand)';
+        loginTab.style.color = 'var(--muted)';
+        loginTab.style.borderColor = 'transparent';
+        signupForm.hidden = false;
+        loginForm.hidden = true;
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const errEl = $('#auth-error'); if (errEl) errEl.hidden = true;
+      const email = $('#login-email')?.value;
+      const password = $('#login-password')?.value;
+      const btn = $('#login-submit-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+      try {
+        const res = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+        $('#auth-dialog')?.close();
+        await load();
+        toast(res.message || 'Signed in successfully.');
+      } catch (err) {
+        if (errEl) { errEl.textContent = err.message; errEl.hidden = false; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign In'; }
+      }
+    }
+
+    async function handleSignup(e) {
+      e.preventDefault();
+      const errEl = $('#auth-error'); if (errEl) errEl.hidden = true;
+      const name = $('#signup-name')?.value;
+      const email = $('#signup-email')?.value;
+      const password = $('#signup-password')?.value;
+      const btn = $('#signup-submit-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
+      try {
+        const res = await request('/api/auth/signup', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+        $('#auth-dialog')?.close();
+        await load();
+        toast(res.message || 'Account created successfully.');
+      } catch (err) {
+        if (errEl) { errEl.textContent = err.message; errEl.hidden = false; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Create Account'; }
+      }
+    }
+
+    async function handleLogout() {
+      try {
+        await request('/api/auth/logout', { method: 'POST' });
+        await load();
+        toast('Logged out successfully.');
+      } catch (err) { toast(err.message); }
+    }
+
+    const authGoogleBtn = $('#auth-google-btn');
+    if (authGoogleBtn) {
+      authGoogleBtn.onclick = async () => {
+        try {
+          const res = await request('/api/auth/google/login');
+          if (res.configured && res.login_url) {
+            window.location.href = res.login_url;
+          } else {
+            toast(res.message || 'Google OAuth is not configured yet.');
+          }
+        } catch (err) { toast(err.message); }
+      };
     }
 
     async function load() { state.data = await request('/api/bootstrap'); render(); }

@@ -75,12 +75,75 @@ def bootstrap():
     today_plan = FreeSlotPlanner.suggest_free_slots(store, today_iso())
     exams = store.get_exams()
     acad_proj = store.calculate_academic_attendance_projection()
+    user_id = session.get("user_id")
+    current_user = store.get_user_by_id(user_id) if user_id else None
     return jsonify({
         "success": True, "profile": profile, "courses": courses, "tasks": tasks,
         "recent_imports": store.recent_imports(), "timetable": store.timetable(), "needs_onboarding": not bool(profile and profile["institution"]),
         "urgent_tasks": urgent, "today": today_iso(), "today_plan": today_plan,
         "exams": exams, "academic_projection": acad_proj,
+        "user": {"id": current_user["id"], "email": current_user["email"], "name": current_user["name"], "auth_provider": current_user.get("auth_provider", "email")} if current_user else None
     })
+
+
+@app.post("/api/auth/signup")
+def auth_signup():
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip()
+    password = data.get("password", "").strip()
+    name = data.get("name", "").strip()
+
+    if not email or "@" not in email:
+        return api_error("Please enter a valid email address.")
+    if not password or len(password) < 6:
+        return api_error("Password must be at least 6 characters long.")
+
+    try:
+        user = store.create_user(email, password=password, name=name, auth_provider="email")
+        session["user_id"] = user["id"]
+        session["user_email"] = user["email"]
+        session["user_name"] = user["name"]
+        return jsonify({"success": True, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}, "message": "Account created successfully."})
+    except ValueError as exc:
+        return api_error(str(exc))
+
+
+@app.post("/api/auth/login")
+def auth_login():
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip()
+    password = data.get("password", "").strip()
+
+    if not email or not password:
+        return api_error("Please enter your email and password.")
+
+    try:
+        user = store.authenticate_user(email, password)
+        session["user_id"] = user["id"]
+        session["user_email"] = user["email"]
+        session["user_name"] = user["name"]
+        return jsonify({"success": True, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}, "message": f"Welcome back, {user['name']}!"})
+    except ValueError as exc:
+        return api_error(str(exc))
+
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    session.pop("user_id", None)
+    session.pop("user_email", None)
+    session.pop("user_name", None)
+    session.pop("google_access_token", None)
+    session.pop("google_user_email", None)
+    return jsonify({"success": True, "message": "Logged out successfully."})
+
+
+@app.get("/api/auth/me")
+def auth_me():
+    user_id = session.get("user_id")
+    user = store.get_user_by_id(user_id) if user_id else None
+    if user:
+        return jsonify({"authenticated": True, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "auth_provider": user.get("auth_provider", "email")}})
+    return jsonify({"authenticated": False, "user": None})
 
 
 @app.route("/api/today-plan", methods=["GET", "POST"])
@@ -242,13 +305,22 @@ def google_callback():
         
         session["google_access_token"] = access_token
         
-        # Try fetching user email
+        # Try fetching Google user info & authenticate user session
         try:
             req = urllib.request.Request("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
             with urllib.request.urlopen(req) as resp:
                 uinfo = json.loads(resp.read().decode("utf-8"))
-                session["google_user_email"] = uinfo.get("email")
-        except Exception:
+                g_email = uinfo.get("email")
+                g_name = uinfo.get("name") or (g_email.split("@")[0].capitalize() if g_email else "Google Student")
+                session["google_user_email"] = g_email
+                if g_email:
+                    user = store.get_user_by_email(g_email)
+                    if not user:
+                        user = store.create_user(g_email, name=g_name, auth_provider="google")
+                    session["user_id"] = user["id"]
+                    session["user_email"] = user["email"]
+                    session["user_name"] = user["name"]
+        except Exception as e:
             session["google_user_email"] = "Google Student"
 
         raw_assignments = GoogleAuthManager.fetch_live_assignments(access_token)

@@ -87,6 +87,15 @@ class StudyOSStore:
                     study_leave_days_before INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL DEFAULT '',
+                    salt TEXT NOT NULL DEFAULT '',
+                    name TEXT NOT NULL DEFAULT '',
+                    auth_provider TEXT NOT NULL DEFAULT 'email',
+                    created_at TEXT NOT NULL
+                );
             """)
             try:
                 conn.execute("ALTER TABLE profile ADD COLUMN academic_start TEXT NOT NULL DEFAULT ''")
@@ -405,3 +414,61 @@ class StudyOSStore:
         if not impacts:
             raise ValueError("No timetable courses match your attendance records. Import attendance using the same course names first.")
         return {"start_date": start.isoformat(), "end_date": end.isoformat(), "can_take_holiday": all(item["safe"] for item in impacts), "impacts": impacts, "unknown_timetable_courses": unknown_courses, "disclaimer": "This assumes every listed class in the selected dates is conducted and missed. Confirm holidays, cancellations, labs, and your institution's official attendance record."}
+
+    def _hash_password(self, password: str, salt: str = None) -> tuple:
+        import hashlib, secrets
+        if not salt:
+            salt = secrets.token_hex(16)
+        pwd_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000).hex()
+        return pwd_hash, salt
+
+    def create_user(self, email: str, password: str = None, name: str = "", auth_provider: str = "email") -> dict:
+        email_clean = email.lower().strip()
+        if not email_clean:
+            raise ValueError("Email is required.")
+        existing = self.get_user_by_email(email_clean)
+        if existing:
+            raise ValueError("An account with this email address already exists.")
+
+        user_id = str(uuid.uuid4())
+        pwd_hash, salt = "", ""
+        if password:
+            pwd_hash, salt = self._hash_password(password)
+
+        user_record = {
+            "id": user_id,
+            "email": email_clean,
+            "password_hash": pwd_hash,
+            "salt": salt,
+            "name": name.strip() or email_clean.split("@")[0].capitalize(),
+            "auth_provider": auth_provider,
+            "created_at": self._now()
+        }
+
+        with self._connect() as conn:
+            conn.execute("""
+                INSERT INTO users (id, email, password_hash, salt, name, auth_provider, created_at)
+                VALUES (:id, :email, :password_hash, :salt, :name, :auth_provider, :created_at)
+            """, user_record)
+        return user_record
+
+    def get_user_by_email(self, email: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower().strip(),)).fetchone()
+            return dict(row) if row else None
+
+    def get_user_by_id(self, user_id: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            return dict(row) if row else None
+
+    def authenticate_user(self, email: str, password: str) -> dict:
+        user = self.get_user_by_email(email)
+        if not user:
+            raise ValueError("Invalid email or password.")
+        if user.get("auth_provider") == "google" and not user.get("password_hash"):
+            raise ValueError("This account uses Google Sign-In. Please click 'Sign in with Google'.")
+        pwd_hash, _ = self._hash_password(password, user["salt"])
+        if pwd_hash != user["password_hash"]:
+            raise ValueError("Invalid email or password.")
+        return user
