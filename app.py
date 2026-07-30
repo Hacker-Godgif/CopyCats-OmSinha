@@ -285,10 +285,21 @@ def google_logout():
     return jsonify({"success": True, "message": "Signed out of Google Classroom."})
 
 
+def get_google_redirect_uri():
+    host = request.host or ""
+    if os.environ.get("VERCEL") or "vercel.app" in host:
+        return f"https://{host}/api/auth/google/callback"
+    env_uri = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
+    if env_uri and "127.0.0.1" not in env_uri and "localhost" not in env_uri:
+        return env_uri
+    scheme = "https" if request.is_secure or request.headers.get("X-Forwarded-Proto") == "https" else "http"
+    return url_for("google_callback", _external=True, _scheme=scheme)
+
+
 @app.get("/api/auth/google/login")
 def google_login():
     from classroom_importer import GoogleAuthManager
-    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "").strip() or url_for("google_callback", _external=True)
+    redirect_uri = get_google_redirect_uri()
     client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
     if not client_id:
         return jsonify({
@@ -307,7 +318,7 @@ def google_callback():
     code = request.args.get("code")
     if not code:
         return redirect("/?error=missing_code")
-    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "").strip() or url_for("google_callback", _external=True)
+    redirect_uri = get_google_redirect_uri()
     try:
         tokens = GoogleAuthManager.exchange_code_for_tokens(code, redirect_uri)
         access_token = tokens.get("access_token")
