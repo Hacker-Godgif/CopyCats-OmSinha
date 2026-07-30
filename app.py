@@ -46,11 +46,35 @@ def bootstrap():
     courses = store.courses()
     urgent = [task for task in tasks if task["status"] == "pending" and task["due_at"] and task["due_at"][:10] <= (date.today() + timedelta(days=3)).isoformat()]
     today_plan = FreeSlotPlanner.suggest_free_slots(store, today_iso())
+    exams = store.get_exams()
+    acad_proj = store.calculate_academic_attendance_projection()
     return jsonify({
         "success": True, "profile": profile, "courses": courses, "tasks": tasks,
         "recent_imports": store.recent_imports(), "timetable": store.timetable(), "needs_onboarding": not bool(profile and profile["institution"]),
         "urgent_tasks": urgent, "today": today_iso(), "today_plan": today_plan,
+        "exams": exams, "academic_projection": acad_proj,
     })
+
+
+@app.get("/api/exams")
+def get_exams():
+    return jsonify({"success": True, "exams": store.get_exams()})
+
+
+@app.post("/api/exams")
+def add_exam():
+    data = request.get_json(silent=True) or {}
+    try:
+        exam = store.add_exam(data.get("course"), data.get("title"), data.get("exam_date"), data.get("study_leave_days_before", 1))
+        return jsonify({"success": True, "exam": exam}), 201
+    except ValueError as exc:
+        return api_error(str(exc))
+
+
+@app.delete("/api/exams/<exam_id>")
+def delete_exam(exam_id):
+    store.delete_exam(exam_id)
+    return jsonify({"success": True})
 
 
 @app.route("/api/suggest-free-slots", methods=["GET", "POST"])

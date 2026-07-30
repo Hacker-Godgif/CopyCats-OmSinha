@@ -79,7 +79,23 @@ class StudyOSStore:
                     confidence TEXT NOT NULL DEFAULT 'review',
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS exams (
+                    id TEXT PRIMARY KEY,
+                    course TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    exam_date TEXT NOT NULL,
+                    study_leave_days_before INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL
+                );
             """)
+            try:
+                conn.execute("ALTER TABLE profile ADD COLUMN academic_start TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE profile ADD COLUMN academic_end TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
 
     @staticmethod
     def _now():
@@ -96,17 +112,122 @@ class StudyOSStore:
             data.get("name", "").strip(), data.get("institution", "").strip(),
             data.get("programme", "").strip(), data.get("semester", "").strip(),
             data.get("language", "en"), max(0.5, min(float(data.get("daily_hours", 3)), 12)),
+            data.get("academic_start", "").strip(), data.get("academic_end", "").strip(),
             now, now,
         )
         with self._connect() as conn:
             conn.execute("""
-                INSERT INTO profile (id,name,institution,programme,semester,language,daily_hours,created_at,updated_at)
-                VALUES (1,?,?,?,?,?,?,?,?)
+                INSERT INTO profile (id,name,institution,programme,semester,language,daily_hours,academic_start,academic_end,created_at,updated_at)
+                VALUES (1,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET name=excluded.name, institution=excluded.institution,
                     programme=excluded.programme, semester=excluded.semester, language=excluded.language,
-                    daily_hours=excluded.daily_hours, updated_at=excluded.updated_at
+                    daily_hours=excluded.daily_hours, academic_start=excluded.academic_start,
+                    academic_end=excluded.academic_end, updated_at=excluded.updated_at
             """, values)
         return self.get_profile()
+
+    def add_exam(self, course, title, exam_date, study_leave_days_before=1):
+        course = (course or "").strip()
+        title = (title or "").strip()
+        if not course or not title or not exam_date:
+            raise ValueError("Course, title, and exam date are required.")
+        exam = {
+            "id": str(uuid.uuid4()),
+            "course": course,
+            "title": title,
+            "exam_date": exam_date,
+            "study_leave_days_before": max(0, int(study_leave_days_before)),
+            "created_at": self._now()
+        }
+        with self._connect() as conn:
+            conn.execute("""INSERT INTO exams VALUES (:id, :course, :title, :exam_date, :study_leave_days_before, :created_at)""", exam)
+        return exam
+
+    def get_exams(self):
+        with self._connect() as conn:
+            return [dict(row) for row in conn.execute("SELECT * FROM exams ORDER BY exam_date").fetchall()]
+
+    def delete_exam(self, exam_id):
+        with self._connect() as conn:
+            conn.execute("DELETE FROM exams WHERE id = ?", (exam_id,))
+
+    def calculate_academic_attendance_projection(self):
+        profile = self.get_profile() or {}
+        start_str = profile.get("academic_start", "")
+        end_str = profile.get("academic_end", "")
+        today_dt = date.today()
+
+        if not start_str or not end_str:
+            return {"days_remaining": 0, "projections": []}
+
+        try:
+            start_dt = date.fromisoformat(start_str)
+            end_dt = date.fromisoformat(end_str)
+        except ValueError:
+            return {"days_remaining": 0, "projections": []}
+
+        days_remaining = max(0, (end_dt - today_dt).days)
+        timetable = self.timetable()
+        courses = self.courses()
+        exams = self.get_exams()
+        exams_by_course = {e["course"].lower(): e for e in exams}
+
+        projections = []
+        calc_start = max(today_dt, start_dt)
+        calc_end = end_dt
+
+        for course in courses:
+            c_name = course["name"]
+            c_key = c_name.lower().strip()
+            
+            exam = exams_by_course.get(c_key)
+            c_end = date.fromisoformat(exam["exam_date"]) if exam and exam.get("exam_date") else calc_end
+            if c_end < calc_start:
+                c_end = calc_start
+
+            future_classes = 0
+            cursor = calc_start
+            while cursor <= c_end:
+                for slot in timetable:
+                    s_course = slot["course"].lower().strip()
+                    if s_course == c_key or s_course in c_key or c_key in s_course:
+                        if slot["weekday"] == cursor.weekday():
+                            future_classes += 1
+                cursor += timedelta(days=1)
+
+            current_conducted = course["conducted_classes"]
+            current_attended = course["attended_classes"]
+            thresh = course["attendance_threshold"]
+
+            total_proj = current_conducted + future_classes
+            req_total_attended = (thresh * total_proj) / 100.0
+            min_future_needed = max(0, int(req_total_attended - current_attended + 0.999))
+            max_bunks_allowed = max(0, future_classes - min_future_needed)
+
+            proj_percentage = round((current_attended + future_classes) / total_proj * 100, 1) if total_proj else 0
+            
+            status = "safe" if min_future_needed <= 0 else ("manageable" if min_future_needed <= future_classes else "at_risk")
+            status_label = f"Can bunk up to {max_bunks_allowed} class{'es' if max_bunks_allowed!=1 else ''}" if status == "safe" else (f"Must attend at least {min_future_needed} of next {future_classes} classes" if status == "manageable" else "Recovery impossible even with 100% attendance")
+
+            projections.append({
+                "course_name": c_name,
+                "current_conducted": current_conducted,
+                "current_attended": current_attended,
+                "current_percentage": course["percentage"],
+                "future_classes": future_classes,
+                "total_projected_classes": total_proj,
+                "min_future_classes_needed": min_future_needed,
+                "max_bunks_allowed": max_bunks_allowed,
+                "projected_percentage": proj_percentage,
+                "status": status,
+                "status_label": status_label,
+                "exam_date": exam["exam_date"] if exam else None,
+            })
+
+        return {
+            "days_remaining": days_remaining,
+            "projections": projections
+        }
 
     def upsert_course(self, name, conducted, attended, threshold=75, source="Student-confirmed attendance export"):
         name = (name or "").strip()

@@ -29,6 +29,7 @@
       --shadow: 0 1px 3px rgba(20, 33, 61, 0.05);
     }
     [data-theme="dark"] {
+      color-scheme: dark;
       --ink: #f1f5f9;
       --muted: #94a3b8;
       --line: #1e293b;
@@ -49,6 +50,8 @@
       --input-border: #2c384e;
       --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     }
+    input[type="date"] { cursor: pointer; }
+    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.95); cursor: pointer; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; transition:background-color 0.25s ease, color 0.25s ease; }
     button,input,select,textarea { font:inherit; }
