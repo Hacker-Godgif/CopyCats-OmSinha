@@ -295,13 +295,21 @@ class StudyOSStore:
             conn.execute("""INSERT INTO tasks VALUES (:id,:title,:course,:due_at,:estimate_minutes,:status,:source_ref,:source_confidence,:created_at,:completed_at)""", task)
         return task
 
-    def tasks(self, status=None):
+    def tasks(self, status="pending", exclude_old=False):
         query = "SELECT * FROM tasks"
+        conditions = []
         values = []
         if status:
-            query += " WHERE status = ?"
+            conditions.append("status = ?")
             values.append(status)
-        query += " ORDER BY CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at, created_at"
+        if exclude_old:
+            conditions.append("(due_at IS NULL OR due_at >= date('now'))")
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+            
+        # Sort: Upcoming/due today first (due_at ASC), then undated tasks (created_at DESC), then old past tasks
+        query += " ORDER BY CASE WHEN due_at IS NULL THEN 1 WHEN due_at < date('now') THEN 2 ELSE 0 END, due_at ASC, created_at DESC"
         with self._connect() as conn:
             return [dict(row) for row in conn.execute(query, values).fetchall()]
 
@@ -312,6 +320,10 @@ class StudyOSStore:
             result = conn.execute("UPDATE tasks SET status=?, completed_at=? WHERE id=?", (status, self._now() if status == "completed" else None, task_id))
         if not result.rowcount:
             raise ValueError("Task not found.")
+
+    def delete_task(self, task_id):
+        with self._connect() as conn:
+            conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
     def log_import(self, kind, filename, status, summary):
         with self._connect() as conn:
