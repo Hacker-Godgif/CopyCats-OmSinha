@@ -160,6 +160,7 @@
     
     <nav class="tabs" aria-label="StudyOS sections" role="tablist">
       <button class="tab" role="tab" aria-selected="true" aria-controls="today-panel" id="today-tab" data-panel="today">Today</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="classroom-panel" id="classroom-tab" data-panel="classroom">Google Classroom</button>
       <button class="tab" role="tab" aria-selected="false" aria-controls="attendance-panel" id="attendance-tab" data-panel="attendance">Attendance</button>
       <button class="tab" role="tab" aria-selected="false" aria-controls="exams-panel" id="exams-tab" data-panel="exams">Exams & Projection</button>
       <button class="tab" role="tab" aria-selected="false" aria-controls="plan-panel" id="plan-tab" data-panel="plan">Plan</button>
@@ -167,6 +168,34 @@
     </nav>
 
     <section class="panel active" id="today-panel" role="tabpanel" aria-labelledby="today-tab"><div class="grid two"><article class="card"><div class="card-head"><div><h2>Today’s next steps</h2><p class="subtle">Complete, then re-plan if your day changes.</p></div><span class="pill" id="today-date"></span></div><ul class="list" id="task-list"></ul></article><aside class="card"><h2>Build a dependable habit</h2><p class="subtle" style="margin-top:8px">Start with the closest deadline. If a task is too large, add a smaller 30–60 minute step instead.</p><div class="notice" style="margin:16px 0 0">StudyOS is a planning aid, not an official record. Confirm attendance and exam rules with your institution.</div></aside></div></section>
+
+    <section class="panel" id="classroom-panel" role="tabpanel" aria-labelledby="classroom-tab">
+      <div class="grid two">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h2>Google Classroom Assignments</h2>
+              <p class="subtle">Remaining course work and assignments synced from your Google Classroom.</p>
+            </div>
+            <button class="button primary small" id="classroom-panel-sync-btn">Sync Classroom</button>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <button class="button small primary" data-gc-filter="all">All Pending (<span id="gc-all-count">0</span>)</button>
+            <button class="button small" data-gc-filter="urgent">Urgent Only (<span id="gc-urgent-count">0</span>)</button>
+          </div>
+          <ul class="list" id="classroom-task-list"></ul>
+        </article>
+        <aside class="card">
+          <h2>Classroom Overview</h2>
+          <p class="subtle" style="margin-top:8px">Assignments are automatically categorized so you can focus on what's due first.</p>
+          <div class="notice" style="margin:16px 0 0">
+            <strong>Urgency Rules:</strong><br>
+            🔴 <strong>Urgent</strong>: Due within 3 days<br>
+            🟢 <strong>Regular</strong>: Due in 4+ days
+          </div>
+        </aside>
+      </div>
+    </section>
 
     <section class="panel" id="attendance-panel" role="tabpanel" aria-labelledby="attendance-tab"><div class="grid two"><article class="card"><div class="card-head"><div><h2>Your attendance</h2><p class="subtle">Upload a portal screenshot to let AI extract your attendance. Review the values before making a decision.</p></div><button class="button small" id="attendance-import-button">Upload attendance image</button></div><div id="course-list"></div></article><aside class="card"><h2>Can I take a holiday?</h2><p class="subtle" style="margin-top:8px">StudyOS combines your uploaded timetable and current attendance to estimate the result of missing every scheduled class in a date range.</p><div class="form-grid" style="margin-top:14px"><div><label for="holiday-start">From</label><input id="holiday-start" type="date"></div><div><label for="holiday-end">To</label><input id="holiday-end" type="date"></div></div><button class="button primary" style="margin-top:12px" id="bunk-check">Check my holiday</button><div id="bunk-result" style="margin-top:14px"></div><details style="margin-top:18px"><summary>Policy source reminder</summary><p class="subtle">Do not assume 75% is your college’s rule. Check your official notice before acting.</p><button class="button small" style="margin-top:10px" id="show-policies">View bundled policy sources</button><div id="policy-list" hidden></div></details></aside></div></section>
 
@@ -405,6 +434,55 @@
       attachDatePickerTriggers();
     }
 
+    function renderClassroomTab() {
+      const d = state.data;
+      if (!d) return;
+      const allTasks = d.tasks || [];
+      const gcPending = allTasks.filter(t => t.status === 'pending' && (t.source_ref?.includes('Classroom') || t.source_ref?.includes('Google')));
+      const urgentCutoff = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+      const gcUrgent = gcPending.filter(t => t.due_at && t.due_at.slice(0, 10) <= urgentCutoff);
+
+      const allCountEl = $('#gc-all-count'); if (allCountEl) allCountEl.textContent = gcPending.length;
+      const urgCountEl = $('#gc-urgent-count'); if (urgCountEl) urgCountEl.textContent = gcUrgent.length;
+
+      const gcList = $('#classroom-task-list');
+      if (!gcList) return;
+
+      const currentFilter = window.currentGcFilter || 'all';
+      const listToRender = currentFilter === 'urgent' ? gcUrgent : gcPending;
+
+      if (!listToRender.length) {
+        gcList.innerHTML = `<div class="empty">${currentFilter === 'urgent' ? 'No urgent Google Classroom assignments due in the next 3 days.' : 'No pending Google Classroom assignments left! Click "Sync Classroom" to check for new coursework.'}</div>`;
+        return;
+      }
+
+      gcList.innerHTML = listToRender.map(t => {
+        const due = t.due_at ? t.due_at.slice(0, 10) : null;
+        const isUrgent = due && due <= urgentCutoff;
+        const pillClass = isUrgent ? 'danger' : 'good';
+        const pillText = isUrgent ? 'Urgent (Due Soon)' : 'Regular';
+        return `
+          <li class="item">
+            <div>
+              <div class="item-title">${escapeHtml(t.title)}</div>
+              <div class="item-meta">
+                ${escapeHtml(t.course || 'General')} · ${dueText(t.due_at)} · ${t.estimate_minutes} min
+                ${t.source_confidence === 'review' ? ' · <span style="color:var(--warn)">⚠️ Needs review</span>' : ''}
+              </div>
+            </div>
+            <div class="task-actions">
+              <span class="pill ${pillClass}">${pillText}</span>
+              <button class="button small" data-complete="${t.id}">Done</button>
+            </div>
+          </li>
+        `;
+      }).join('');
+
+      document.querySelectorAll('#classroom-task-list [data-complete]').forEach(button => {
+        button.onclick = () => completeTask(button.dataset.complete);
+      });
+    }
+
     function render() {
       const d = state.data;
       if (!d) return;
@@ -431,6 +509,7 @@
       document.querySelectorAll('[data-complete]').forEach(button => button.onclick = () => completeTask(button.dataset.complete));
 
       renderExamsAndProjection();
+      renderClassroomTab();
     }
 
     async function load() { state.data = await request('/api/bootstrap'); render(); }
@@ -507,6 +586,32 @@
         }
       };
     }
+
+    const gcPanelSyncBtn = $('#classroom-panel-sync-btn');
+    if (gcPanelSyncBtn) {
+      gcPanelSyncBtn.onclick = async () => {
+        gcPanelSyncBtn.disabled = true;
+        gcPanelSyncBtn.textContent = 'Syncing…';
+        try {
+          const d = await request('/api/import/google-classroom', { method: 'POST' });
+          await load();
+          toast(d.message || 'Google Classroom tasks synced successfully!');
+        } catch (e) { toast(e.message); }
+        finally {
+          gcPanelSyncBtn.disabled = false;
+          gcPanelSyncBtn.textContent = 'Sync Classroom';
+        }
+      };
+    }
+
+    document.querySelectorAll('[data-gc-filter]').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('[data-gc-filter]').forEach(b => b.classList.remove('primary'));
+        btn.classList.add('primary');
+        window.currentGcFilter = btn.dataset.gcFilter;
+        renderClassroomTab();
+      };
+    });
 
     // Inline Academic Term Dates Form
     const inlineAcadForm = $('#inline-academic-form');
