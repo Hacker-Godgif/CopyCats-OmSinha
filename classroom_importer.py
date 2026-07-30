@@ -22,16 +22,17 @@ SCOPES = [
 class GoogleAuthManager:
     @staticmethod
     def get_login_url(redirect_uri: str) -> str:
-        client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+        client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
         params = {
             "client_id": client_id,
-            "redirect_uri": redirect_uri,
+            "redirect_uri": redirect_uri.strip(),
             "response_type": "code",
             "scope": " ".join(SCOPES),
             "access_type": "offline",
-            "prompt": "consent"
+            "prompt": "select_account consent",
+            "include_granted_scopes": "true"
         }
-        return f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}"
+        return f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params, quote_via=urllib.parse.quote)}"
 
     @staticmethod
     def exchange_code_for_tokens(code: str, redirect_uri: str) -> Dict[str, Any]:
