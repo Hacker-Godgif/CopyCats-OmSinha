@@ -55,41 +55,66 @@ class GoogleAuthManager:
         """Fetch courses & coursework directly from Google Classroom REST API"""
         headers = {"Authorization": f"Bearer {access_token}"}
         
-        req = urllib.request.Request(f"{GOOGLE_CLASSROOM_API}/courses?courseStates=ACTIVE", headers=headers)
-        try:
-            with urllib.request.urlopen(req) as resp:
-                courses_data = json.loads(resp.read().decode("utf-8"))
-        except Exception:
-            return []
+        courses = []
+        # Try fetching student courses first, then active courses
+        for url in [f"{GOOGLE_CLASSROOM_API}/courses?studentId=me&courseStates=ACTIVE", f"{GOOGLE_CLASSROOM_API}/courses?courseStates=ACTIVE"]:
+            req = urllib.request.Request(url, headers=headers)
+            try:
+                with urllib.request.urlopen(req) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    fetched = data.get("courses", [])
+                    if fetched:
+                        courses = fetched
+                        break
+            except Exception as e:
+                print(f"[GoogleClassroom] Course list warning for {url}: {e}")
+                continue
 
-        courses = courses_data.get("courses", [])
         assignments = []
 
         for course in courses:
             c_id = course.get("id")
             c_name = course.get("name", "Classroom Course")
             
-            cw_req = urllib.request.Request(f"{GOOGLE_CLASSROOM_API}/courses/{c_id}/courseWork", headers=headers)
+            cw_url = f"{GOOGLE_CLASSROOM_API}/courses/{c_id}/courseWork"
+            cw_req = urllib.request.Request(cw_url, headers=headers)
             try:
                 with urllib.request.urlopen(cw_req) as cw_resp:
                     cw_data = json.loads(cw_resp.read().decode("utf-8"))
                     for item in cw_data.get("courseWork", []):
+                        cw_id = item.get("id")
                         state = str(item.get("state", "PUBLISHED")).upper()
-                        # Skip assignments that are already turned in or completed
-                        if state in {"TURNED_IN", "RETURNED", "COMPLETED", "SUBMITTED"}:
+                        
+                        # Check student submission status
+                        is_submitted = False
+                        sub_url = f"{GOOGLE_CLASSROOM_API}/courses/{c_id}/courseWork/{cw_id}/studentSubmissions?studentId=me"
+                        try:
+                            sub_req = urllib.request.Request(sub_url, headers=headers)
+                            with urllib.request.urlopen(sub_req) as sub_resp:
+                                sub_data = json.loads(sub_resp.read().decode("utf-8"))
+                                for sub in sub_data.get("studentSubmissions", []):
+                                    sub_state = str(sub.get("state", "")).upper()
+                                    if sub_state in {"TURNED_IN", "RETURNED", "SUBMITTED"}:
+                                        is_submitted = True
+                                        break
+                        except Exception:
+                            pass
+
+                        if is_submitted or state in {"TURNED_IN", "RETURNED", "COMPLETED", "SUBMITTED"}:
                             continue
 
                         due_date = item.get("dueDate", {})
                         raw_due = f"{due_date.get('year')}-{due_date.get('month'):02d}-{due_date.get('day'):02d}" if due_date.get("year") else ""
                         
                         assignments.append({
-                            "id": item.get("id"),
+                            "id": cw_id,
                             "title": item.get("title", "Untitled Assignment"),
                             "course": c_name,
                             "dueDate": raw_due,
                             "status": state
                         })
-            except Exception:
+            except Exception as e:
+                print(f"[GoogleClassroom] CourseWork fetch warning for course {c_id}: {e}")
                 continue
 
         return assignments

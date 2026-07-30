@@ -119,9 +119,14 @@ def import_attendance():
 
 @app.post("/api/import/google-classroom")
 def import_google_classroom():
-    from classroom_importer import ClassroomImporter
+    from classroom_importer import ClassroomImporter, GoogleAuthManager
     data = request.get_json(silent=True) or {}
     custom_payload = data.get("assignments")
+    
+    access_token = session.get("google_access_token")
+    if access_token and custom_payload is None:
+        custom_payload = GoogleAuthManager.fetch_live_assignments(access_token)
+        
     imported_tasks = ClassroomImporter.import_mock_assignments(custom_payload)
     
     existing = store.tasks()
@@ -146,7 +151,7 @@ def import_google_classroom():
             "course": t.course,
             "due_at": t.due_at,
             "estimate_minutes": 60,
-            "source_ref": "Google Classroom API",
+            "source_ref": "Google Classroom API (Live OAuth)" if access_token else "Google Classroom API",
             "source_confidence": "review" if t.needs_manual_review else "confirmed"
         })
         saved_task["is_urgent"] = is_urgent
@@ -169,7 +174,7 @@ def google_status():
     return jsonify({
         "configured": bool(client_id),
         "client_id": client_id if client_id else None,
-        "authenticated": bool(user_email),
+        "authenticated": bool(session.get("google_access_token")),
         "user_email": user_email
     })
 
@@ -177,6 +182,7 @@ def google_status():
 @app.post("/api/auth/google/logout")
 def google_logout():
     session.pop("google_user_email", None)
+    session.pop("google_access_token", None)
     return jsonify({"success": True, "message": "Signed out of Google Classroom."})
 
 
@@ -208,22 +214,31 @@ def google_callback():
         access_token = tokens.get("access_token")
         if not access_token:
             return redirect("/?error=no_token")
+        
+        session["google_access_token"] = access_token
+        
+        # Try fetching user email
+        try:
+            req = urllib.request.Request("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+            with urllib.request.urlopen(req) as resp:
+                uinfo = json.loads(resp.read().decode("utf-8"))
+                session["google_user_email"] = uinfo.get("email")
+        except Exception:
+            session["google_user_email"] = "Google Student"
+
         raw_assignments = GoogleAuthManager.fetch_live_assignments(access_token)
-        imported_tasks = ClassroomImporter.import_mock_assignments(raw_assignments if raw_assignments else None)
+        imported_tasks = ClassroomImporter.import_mock_assignments(raw_assignments)
         
         existing = store.tasks()
         existing_keys = {(t["title"].lower().strip(), (t.get("course") or "").lower().strip()) for t in existing}
 
         urgent_cutoff = (date.today() + timedelta(days=3)).isoformat()
-        urgent_count = 0
+        added_count = 0
         for t in imported_tasks:
             key = (t.title.lower().strip(), (t.course or "").lower().strip())
             if key in existing_keys:
                 continue
 
-            due_str = t.due_at or ""
-            if due_str and due_str[:10] <= urgent_cutoff:
-                urgent_count += 1
             store.add_task({
                 "title": t.title,
                 "course": t.course,
@@ -232,8 +247,11 @@ def google_callback():
                 "source_ref": "Google Classroom API (Live OAuth)",
                 "source_confidence": "review" if t.needs_manual_review else "confirmed"
             })
-        return redirect("/?notice=google_sync_success")
+            added_count += 1
+            
+        return redirect(f"/?notice=google_sync_success&count={added_count}")
     except Exception as exc:
+        print(f"[GoogleAuthCallback Error]: {exc}")
         return redirect("/?error=auth_failed")
 
 
