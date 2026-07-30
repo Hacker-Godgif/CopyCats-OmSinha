@@ -8,6 +8,9 @@ import urllib.parse
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask, jsonify, render_template, request, Response, url_for, redirect, session
 
 from attendance_risk_agent import AttendanceRiskAgent
