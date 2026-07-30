@@ -464,6 +464,7 @@
       const d = state.data;
       if (!d) return;
       const allTasks = d.tasks || [];
+      const gcPending = allTasks.filter(t => t.status === 'pending' && (t.source_ref?.includes('Classroom') || t.source_ref?.includes('Google')));
       const todayIso = d.today || new Date().toISOString().slice(0, 10);
       const urgentCutoff = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
       const gcUrgent = gcPending.filter(t => t.due_at && t.due_at.slice(0, 10) >= todayIso && t.due_at.slice(0, 10) <= urgentCutoff);
