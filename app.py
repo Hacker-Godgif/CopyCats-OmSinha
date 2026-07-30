@@ -106,6 +106,44 @@ def import_attendance():
         return api_error(str(exc))
 
 
+@app.post("/api/import/google-classroom")
+def import_google_classroom():
+    from classroom_importer import ClassroomImporter
+    data = request.get_json(silent=True) or {}
+    custom_payload = data.get("assignments")
+    imported_tasks = ClassroomImporter.import_mock_assignments(custom_payload)
+    
+    added_tasks = []
+    urgent_cutoff = (date.today() + timedelta(days=3)).isoformat()
+    urgent_count = 0
+
+    for t in imported_tasks:
+        due_str = t.due_at or ""
+        is_urgent = bool(due_str and due_str[:10] <= urgent_cutoff)
+        if is_urgent:
+            urgent_count += 1
+            
+        saved_task = store.add_task({
+            "title": t.title,
+            "course": t.course,
+            "due_at": t.due_at,
+            "estimate_minutes": 60,
+            "source_ref": "Google Classroom API",
+            "source_confidence": "review" if t.needs_manual_review else "confirmed"
+        })
+        saved_task["is_urgent"] = is_urgent
+        added_tasks.append(saved_task)
+
+    store.log_import("google_classroom", "Google Classroom API", "confirmed", f"Imported {len(added_tasks)} assignments ({urgent_count} urgent)")
+    return jsonify({
+        "success": True,
+        "count": len(added_tasks),
+        "urgent_count": urgent_count,
+        "tasks": added_tasks,
+        "message": f"Synced {len(added_tasks)} assignments from Google Classroom ({urgent_count} urgent)."
+    })
+
+
 @app.post("/api/analyze/timetable-image")
 def analyze_timetable_image():
     data = request.get_json(silent=True) or {}

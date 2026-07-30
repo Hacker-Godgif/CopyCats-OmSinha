@@ -50,8 +50,14 @@
       --input-border: #2c384e;
       --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     }
-    input[type="date"] { cursor: pointer; }
-    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.95); cursor: pointer; }
+    input[type="date"] {
+      cursor: pointer;
+      font-weight: 600;
+    }
+    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.95);
+      cursor: pointer;
+    }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; transition:background-color 0.25s ease, color 0.25s ease; }
     button,input,select,textarea { font:inherit; }
@@ -59,7 +65,7 @@
     button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:3px solid #8ba6ff; outline-offset:2px; }
     .skip { position:absolute; top:-4rem; left:1rem; background:var(--card); color:var(--ink); padding:.55rem .8rem; z-index:10; }
     .skip:focus { top:1rem; }
-    header { height:64px; display:flex; align-items:center; justify-space-between; padding:0 clamp(16px,4vw,48px); background:var(--header-bg); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:3; transition:background-color 0.25s ease, border-color 0.25s ease; }
+    header { height:64px; display:flex; align-items:center; justify-content:space-between; padding:0 clamp(16px,4vw,48px); background:var(--header-bg); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:3; transition:background-color 0.25s ease, border-color 0.25s ease; }
     .brand { font-weight:800; letter-spacing:-.04em; font-size:1.2rem; }
     .brand span { color:var(--brand); }
     .header-right { display:flex; align-items:center; gap:16px; }
@@ -147,7 +153,7 @@
     </div>
   </header>
   <main id="content">
-    <section aria-labelledby="home-title"><div class="eyebrow">Student workspace</div><h1 id="home-title">Make your next academic move clear.</h1><p class="lede">Upload your timetable or attendance screenshot. AI extracts details, tracks academic duration & exam dates, and calculates your exact bunk allowance.</p><div class="top-actions"><button class="button primary" id="add-task-button">Add a task</button><button class="button" id="import-button">Upload timetable image</button><a class="button" href="/api/calendar.ics">Export deadlines</a></div></section>
+    <section aria-labelledby="home-title"><div class="eyebrow">Student workspace</div><h1 id="home-title">Make your next academic move clear.</h1><p class="lede">Upload your timetable or attendance screenshot. AI extracts details, tracks academic duration & exam dates, and calculates your exact bunk allowance.</p><div class="top-actions"><button class="button primary" id="add-task-button">Add a task</button><button class="button" id="sync-classroom-button">Sync Google Classroom</button><button class="button" id="import-button">Upload timetable image</button><a class="button" href="/api/calendar.ics">Export deadlines</a></div></section>
     <div id="setup-notice" class="notice" hidden><strong>Complete your setup.</strong> Add your college, study time, and academic duration before relying on a plan. <button class="button small" id="setup-button">Set up now</button></div>
     <div id="app-notice" class="notice" hidden aria-live="polite"></div>
     <section class="grid stats" aria-label="Your study overview"><article class="card"><div class="subtle">Tasks due soon</div><div class="metric" id="urgent-count">0</div><div class="subtle">within the next 3 days</div></article><article class="card"><div class="subtle">Attendance to watch</div><div class="metric" id="risk-count">0</div><div class="subtle">courses below your threshold</div></article><article class="card"><div class="subtle">Scheduled Exams</div><div class="metric" id="exams-count">0</div><div class="subtle">exam dates in database</div></article></section>
@@ -169,16 +175,40 @@
         <article class="card">
           <div class="card-head">
             <div>
-              <h2>Academic Attendance Projection</h2>
-              <p class="subtle">Based on your academic duration, weekly timetable, and exam dates. Shows remaining classes and maximum bunk allowance.</p>
+              <h2>Academic Term Duration & Dates</h2>
+              <p class="subtle">Set or edit your semester start and end dates below. Attendance projections will update automatically.</p>
             </div>
-            <button class="button small" id="academic-setup-btn">Set Academic Duration</button>
+          </div>
+          <form id="inline-academic-form" style="margin-bottom:20px;">
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="inline-acad-start">Term Start Date</label>
+                <input id="inline-acad-start" name="academic_start" type="date" required>
+              </div>
+              <div class="form-field">
+                <label for="inline-acad-end">Term End Date</label>
+                <input id="inline-acad-end" name="academic_end" type="date" required>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+              <button class="button primary small" type="submit">Save Term Dates</button>
+              <button type="button" class="button small" id="preset-sem-btn">📅 Aug 1 – Dec 15</button>
+              <button type="button" class="button small" id="preset-4m-btn">📅 Today + 4 Months</button>
+            </div>
+          </form>
+
+          <div class="card-head" style="border-top:1px solid var(--line); padding-top:18px; margin-top:16px;">
+            <div>
+              <h2>Academic Attendance Projection</h2>
+              <p class="subtle">Calculated using your weekly timetable, academic duration, and exam dates.</p>
+            </div>
           </div>
           <div id="duration-summary" class="citation" style="margin-bottom:14px">Loading academic duration…</div>
           <div id="academic-projection-list"></div>
         </article>
+
         <aside class="card">
-          <h2>Exam Schedule</h2>
+          <h2>Exam Schedule & Dates</h2>
           <p class="subtle" style="margin-top:8px">Add your midterm/endterm exam dates to calculate exact class counts and reserve study leaves.</p>
           <form id="exam-form" style="margin-top:14px">
             <div class="form-field">
@@ -215,36 +245,38 @@
   </main>
 
   <dialog id="profile-dialog" aria-labelledby="profile-title">
-    <form class="modal" method="dialog" id="profile-form">
+    <div class="modal">
       <header>
         <div>
           <h2 id="profile-title">Set up your StudyOS workspace</h2>
           <p class="subtle">Configure your college profile and academic term duration.</p>
         </div>
       </header>
-      <div class="form-grid">
-        <div class="form-field"><label for="student-name">First name</label><input id="student-name" name="name" autocomplete="given-name"></div>
-        <div class="form-field"><label for="daily-hours">Study time per day</label><input id="daily-hours" name="daily_hours" type="number" min="0.5" max="12" step="0.5" value="3" required></div>
-      </div>
-      <div class="form-field"><label for="institution">College or university</label><input id="institution" name="institution" autocomplete="organization" required placeholder="e.g. Delhi University"></div>
-      <div class="form-grid">
-        <div class="form-field"><label for="programme">Programme</label><input id="programme" name="programme" placeholder="e.g. B.Tech CSE"></div>
-        <div class="form-field"><label for="semester">Semester</label><input id="semester" name="semester" placeholder="e.g. 3"></div>
-      </div>
-      <div class="form-grid">
-        <div class="form-field"><label for="academic-start">Academic Start Date</label><input id="academic-start" name="academic_start" type="date"></div>
-        <div class="form-field"><label for="academic-end">Academic End Date</label><input id="academic-end" name="academic_end" type="date"></div>
-      </div>
-      <footer>
-        <button class="button" value="cancel">Cancel</button>
-        <button class="button primary" type="submit">Save setup</button>
-      </footer>
-    </form>
+      <form id="profile-form">
+        <div class="form-grid">
+          <div class="form-field"><label for="student-name">First name</label><input id="student-name" name="name" autocomplete="given-name"></div>
+          <div class="form-field"><label for="daily-hours">Study time per day</label><input id="daily-hours" name="daily_hours" type="number" min="0.5" max="12" step="0.5" value="3" required></div>
+        </div>
+        <div class="form-field"><label for="institution">College or university</label><input id="institution" name="institution" autocomplete="organization" required placeholder="e.g. Delhi University"></div>
+        <div class="form-grid">
+          <div class="form-field"><label for="programme">Programme</label><input id="programme" name="programme" placeholder="e.g. B.Tech CSE"></div>
+          <div class="form-field"><label for="semester">Semester</label><input id="semester" name="semester" placeholder="e.g. 3"></div>
+        </div>
+        <div class="form-grid">
+          <div class="form-field"><label for="academic-start">Academic Start Date</label><input id="academic-start" name="academic_start" type="date"></div>
+          <div class="form-field"><label for="academic-end">Academic End Date</label><input id="academic-end" name="academic_end" type="date"></div>
+        </div>
+        <footer>
+          <button type="button" class="button" id="profile-cancel-btn">Cancel</button>
+          <button class="button primary" type="submit">Save setup</button>
+        </footer>
+      </form>
+    </div>
   </dialog>
 
-  <dialog id="task-dialog" aria-labelledby="task-title"><form class="modal" method="dialog" id="task-form"><header><div><h2 id="task-title">Add a study task</h2><p class="subtle">Make it small enough to finish in one sitting.</p></div></header><div class="form-field"><label for="task-name">Task</label><input id="task-name" name="title" required placeholder="Finish DBMS assignment outline"></div><div class="form-grid"><div class="form-field"><label for="task-course">Course</label><input id="task-course" name="course" placeholder="DBMS"></div><div class="form-field"><label for="task-due">Due date</label><input id="task-due" name="due_at" type="date"></div></div><div class="form-field"><label for="task-minutes">Estimated minutes</label><input id="task-minutes" name="estimate_minutes" type="number" min="15" max="480" step="15" value="60"></div><footer><button class="button" value="cancel">Cancel</button><button class="button primary" type="submit">Add task</button></footer></form></dialog>
+  <dialog id="task-dialog" aria-labelledby="task-title"><form class="modal" id="task-form"><header><div><h2 id="task-title">Add a study task</h2><p class="subtle">Make it small enough to finish in one sitting.</p></div></header><div class="form-field"><label for="task-name">Task</label><input id="task-name" name="title" required placeholder="Finish DBMS assignment outline"></div><div class="form-grid"><div class="form-field"><label for="task-course">Course</label><input id="task-course" name="course" placeholder="DBMS"></div><div class="form-field"><label for="task-due">Due date</label><input id="task-due" name="due_at" type="date"></div></div><div class="form-field"><label for="task-minutes">Estimated minutes</label><input id="task-minutes" name="estimate_minutes" type="number" min="15" max="480" step="15" value="60"></div><footer><button type="button" class="button" id="task-cancel-btn">Cancel</button><button class="button primary" type="submit">Add task</button></footer></form></dialog>
 
-  <dialog id="upload-dialog" aria-labelledby="upload-title"><form class="modal" method="dialog" id="upload-form"><header><div><h2 id="upload-title">Upload an image for AI analysis</h2><p class="subtle" id="upload-help">Use a clear timetable image with days, course names, and times.</p></div></header><div class="form-field"><label for="image-file">Image</label><input id="image-file" name="image" type="file" accept="image/png,image/jpeg,image/webp" required><p class="help">PNG, JPG, or WEBP, up to 8 MB. Your image is sent only to the AI provider configured on this device.</p></div><div class="form-field" id="threshold-field" hidden><label for="attendance-threshold">Attendance threshold (%)</label><input id="attendance-threshold" name="threshold" type="number" value="75" min="1" max="100" step="0.5"></div><footer><button class="button" value="cancel">Cancel</button><button class="button primary" type="submit" id="upload-submit">Analyse image</button></footer></form></dialog>
+  <dialog id="upload-dialog" aria-labelledby="upload-title"><form class="modal" id="upload-form"><header><div><h2 id="upload-title">Upload an image for AI analysis</h2><p class="subtle" id="upload-help">Use a clear timetable image with days, course names, and times.</p></div></header><div class="form-field"><label for="image-file">Image</label><input id="image-file" name="image" type="file" accept="image/png,image/jpeg,image/webp" required><p class="help">PNG, JPG, or WEBP, up to 8 MB. Your image is sent only to the AI provider configured on this device.</p></div><div class="form-field" id="threshold-field" hidden><label for="attendance-threshold">Attendance threshold (%)</label><input id="attendance-threshold" name="threshold" type="number" value="75" min="1" max="100" step="0.5"></div><footer><button type="button" class="button" id="upload-cancel-btn">Cancel</button><button class="button primary" type="submit" id="upload-submit">Analyse image</button></footer></form></dialog>
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
 
@@ -253,6 +285,19 @@
     const $ = s => document.querySelector(s);
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
     
+    // Auto-enable date picker popup on date input click
+    function attachDatePickerTriggers() {
+      document.querySelectorAll('input[type="date"]').forEach(inp => {
+        if (inp.dataset.pickerAttached) return;
+        inp.dataset.pickerAttached = 'true';
+        inp.addEventListener('click', () => {
+          if (typeof inp.showPicker === 'function') {
+            try { inp.showPicker(); } catch (e) {}
+          }
+        });
+      });
+    }
+
     // Theme Management
     function initTheme() {
       const saved = localStorage.getItem('studyos-theme');
@@ -287,6 +332,11 @@
       const d = state.data;
       if (!d) return;
 
+      // Sync inline academic term dates
+      const prof = d.profile || {};
+      const inlineStart = $('#inline-acad-start'); if (inlineStart) inlineStart.value = prof.academic_start || '';
+      const inlineEnd = $('#inline-acad-end'); if (inlineEnd) inlineEnd.value = prof.academic_end || '';
+
       // 1. Exams Count & List
       const exams = d.exams || [];
       const examsCount = $('#exams-count');
@@ -314,15 +364,12 @@
 
       // 2. Academic Duration & Projection
       const proj = d.academic_projection;
-      const prof = d.profile || {};
       const durationBox = $('#duration-summary');
       if (durationBox) {
         if (prof.academic_start && prof.academic_end) {
           durationBox.innerHTML = `<strong>Term Duration:</strong> ${prof.academic_start} to ${prof.academic_end} (${proj?.days_remaining || 0} days remaining)`;
         } else {
-          durationBox.innerHTML = `<strong>Academic Duration:</strong> Not set. <button class="button small" id="quick-duration-btn">Set Academic Duration</button>`;
-          const qBtn = $('#quick-duration-btn');
-          if (qBtn) qBtn.onclick = openProfile;
+          durationBox.innerHTML = `<strong>Academic Duration:</strong> Not set. Enter your term start & end dates above and click Save.`;
         }
       }
 
@@ -354,6 +401,8 @@
           }).join('')}</ul>`;
         }
       }
+
+      attachDatePickerTriggers();
     }
 
     function render() {
@@ -412,16 +461,9 @@
       if (profDialog) profDialog.showModal();
     }
 
-    function bindDialogCancelButtons() {
-      document.querySelectorAll('dialog form button[value="cancel"]').forEach(button => {
-        button.addEventListener('click', event => {
-          event.preventDefault();
-          const dialog = button.closest('dialog');
-          if (dialog) dialog.close('cancel');
-        });
-      });
-    }
-    bindDialogCancelButtons();
+    $('#profile-cancel-btn')?.addEventListener('click', () => $('#profile-dialog')?.close());
+    $('#task-cancel-btn')?.addEventListener('click', () => $('#task-dialog')?.close());
+    $('#upload-cancel-btn')?.addEventListener('click', () => $('#upload-dialog')?.close());
 
     document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', 'false'));
@@ -449,13 +491,68 @@
     const importBtn = $('#import-button'); if (importBtn) importBtn.onclick = () => openUpload('timetable');
     const attImportBtn = $('#attendance-import-button'); if (attImportBtn) attImportBtn.onclick = () => openUpload('attendance');
 
+    const syncGcBtn = $('#sync-classroom-button');
+    if (syncGcBtn) {
+      syncGcBtn.onclick = async () => {
+        syncGcBtn.disabled = true;
+        syncGcBtn.textContent = 'Syncing Classroom…';
+        try {
+          const d = await request('/api/import/google-classroom', { method: 'POST' });
+          await load();
+          toast(d.message || 'Google Classroom tasks synced successfully!');
+        } catch (e) { toast(e.message); }
+        finally {
+          syncGcBtn.disabled = false;
+          syncGcBtn.textContent = 'Sync Google Classroom';
+        }
+      };
+    }
+
+    // Inline Academic Term Dates Form
+    const inlineAcadForm = $('#inline-academic-form');
+    if (inlineAcadForm) {
+      inlineAcadForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const start = $('#inline-acad-start')?.value;
+        const end = $('#inline-acad-end')?.value;
+        if (!start || !end) { toast('Please pick both start and end dates.'); return; }
+        if (end <= start) { toast('End date must be after start date.'); return; }
+        const p = state.data?.profile || {};
+        p.academic_start = start;
+        p.academic_end = end;
+        if (!p.institution) p.institution = 'Delhi University';
+        try {
+          await request('/api/profile', { method: 'POST', body: JSON.stringify(p) });
+          await load();
+          toast('Academic term dates saved and attendance projection updated!');
+        } catch (err) { toast(err.message); }
+      });
+    }
+
+    // Preset buttons
+    $('#preset-sem-btn')?.addEventListener('click', () => {
+      const s = $('#inline-acad-start'), e = $('#inline-acad-end');
+      if (s && e) { s.value = '2026-08-01'; e.value = '2026-12-15'; }
+    });
+    $('#preset-4m-btn')?.addEventListener('click', () => {
+      const s = $('#inline-acad-start'), e = $('#inline-acad-end');
+      const now = new Date();
+      const future = new Date();
+      future.setDate(now.getDate() + 120);
+      if (s && e) {
+        s.value = now.toISOString().slice(0,10);
+        e.value = future.toISOString().slice(0,10);
+      }
+    });
+
     const profileForm = $('#profile-form');
     if (profileForm) {
       profileForm.addEventListener('submit', async e => {
         e.preventDefault();
         const f = new FormData(e.target);
+        const data = Object.fromEntries(f);
         try {
-          await request('/api/profile', { method: 'POST', body: JSON.stringify(Object.fromEntries(f)) });
+          await request('/api/profile', { method: 'POST', body: JSON.stringify(data) });
           $('#profile-dialog')?.close();
           await load();
           toast('Your workspace profile and academic duration are saved.');
