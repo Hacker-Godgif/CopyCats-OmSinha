@@ -89,7 +89,12 @@ def analyze_timetable_image():
     profile = store.get_profile() or {}
     try:
         result = TimetableVisionAgent().analyse(image_bytes, mime_type, {"institution": profile.get("institution", "not supplied"), "programme": profile.get("programme", "not supplied"), "semester": profile.get("semester", "not supplied")})
-        timetable = store.replace_timetable(result["classes"], data.get("filename", "timetable image"))
+        if result.get("classes"):
+            timetable = store.replace_timetable(result["classes"], data.get("filename", "timetable image"))
+        else:
+            timetable = store.timetable()
+            result.setdefault("uncertainties", []).append("No recurring classes were detected automatically. Please review the image manually and add the timetable manually if needed.")
+            result["summary"] = result.get("summary", "Timetable upload needs manual review.")
         return jsonify({"success": True, "analysis": result, "timetable": timetable, "notice": "Review every extracted class before relying on holiday or attendance advice."})
     except ValueError as exc:
         return api_error(str(exc))

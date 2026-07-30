@@ -37,11 +37,15 @@ class TimetableVisionAgent:
 
     @property
     def configured(self):
-        return bool(self.api_key and self.base_url and self.model)
+        placeholders = {"replace_with_your_key", "your_secret_key", "your_api_key", "your_key", "your-vision-capable-model", "your_vision_capable_model", "your-model"}
+        return bool(self.api_key and self.base_url and self.model and self.api_key.lower() not in placeholders and self.model.lower() not in placeholders and self.base_url not in {"https://your-provider.example/v1", "https://example.com/v1"})
 
     def analyse(self, image_bytes, mime_type, context):
         instructions = """You extract a recurring weekly Indian college timetable from an uploaded image. Return ONLY valid JSON with this exact shape: {\"summary\": string, \"classes\": [{\"course\": string, \"weekday\": 0, \"start_time\": \"HH:MM\", \"end_time\": \"HH:MM\", \"room\": string, \"confidence\": \"confirmed\"|\"review\"}], \"uncertainties\": [string]}. weekday uses Monday=0 through Sunday=6. Include only actual teaching/lab sessions, not breaks. If any text, day, or time is unclear, still extract the best reading but use confidence=review and state why in uncertainties. Do not invent classes."""
-        parsed = self._ask(instructions, image_bytes, mime_type, context)
+        try:
+            parsed = self._ask(instructions, image_bytes, mime_type, context)
+        except ValueError as exc:
+            parsed = self._fallback_response(str(exc), context)
         classes = parsed.get("classes", [])
         if not isinstance(classes, list):
             raise ValueError("The AI response did not contain a class list.")
@@ -50,7 +54,10 @@ class TimetableVisionAgent:
 
     def analyse_attendance(self, image_bytes, mime_type, context):
         instructions = """You extract an attendance report from an uploaded Indian college portal screenshot or document. Return ONLY valid JSON with this exact shape: {\"summary\": string, \"records\": [{\"course\": string, \"conducted_classes\": 0, \"attended_classes\": 0, \"confidence\": \"confirmed\"|\"review\"}], \"uncertainties\": [string]}. Do not infer values that are absent. Mark unreadable rows review."""
-        parsed = self._ask(instructions, image_bytes, mime_type, context)
+        try:
+            parsed = self._ask(instructions, image_bytes, mime_type, context)
+        except ValueError as exc:
+            return self._fallback_response(str(exc), context, records=True)
         records = []
         for row in parsed.get("records", []):
             try:
@@ -67,7 +74,7 @@ class TimetableVisionAgent:
 
     def _ask(self, instructions, image_bytes, mime_type, context):
         if not self.configured:
-            raise ValueError("AI is not configured. Set AI_API_KEY, AI_BASE_URL, and AI_MODEL in your local environment; never put a key in the source code.")
+            raise ValueError("AI provider not configured. The upload will be saved for manual review until a real provider is configured.")
         encoded = base64.b64encode(image_bytes).decode("ascii")
         payload = {"model": self.model, "temperature": 0, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": [{"type": "text", "text": "Student context: " + json.dumps(context)}, {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}]}]}
         request = urllib.request.Request(self.base_url + "/chat/completions", data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, method="POST")
@@ -85,6 +92,13 @@ class TimetableVisionAgent:
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise ValueError("The AI returned an unreadable result. Please retry with a clearer image.") from exc
         return parsed
+
+    def _fallback_response(self, reason, context, records=False):
+        summary = "Timetable upload saved for manual review because the AI provider is not configured." if not records else "Attendance upload saved for manual review because the AI provider is not configured."
+        uncertainties = [reason or "The upload could not be processed automatically.", "The app switched to a local fallback so your upload does not fail. Review the values manually before relying on them."]
+        if not records:
+            return {"summary": summary, "classes": [], "uncertainties": uncertainties, "fallback_used": True, "context": context}
+        return {"summary": summary, "records": [], "uncertainties": uncertainties, "fallback_used": True, "context": context}
 
     def _normalise(self, classes):
         valid = []
