@@ -1,11 +1,94 @@
-"""
-Mock Google Classroom Importer for StudyOS-India.
-Converts mock Classroom assignment payload into Task objects using the identical Task validation pipeline.
-"""
-
+import os
+import json
+import urllib.request
+import urllib.parse
 from typing import List, Dict, Any
 from schema import Task, SchemaValidator
 from date_parser import parse_indian_date
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_CLASSROOM_API = "https://classroom.googleapis.com/v1"
+
+SCOPES = [
+    "https://www.googleapis.com/auth/classroom.courses.readonly",
+    "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+    "openid",
+    "email",
+    "profile"
+]
+
+
+class GoogleAuthManager:
+    @staticmethod
+    def get_login_url(redirect_uri: str) -> str:
+        client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": " ".join(SCOPES),
+            "access_type": "offline",
+            "prompt": "consent"
+        }
+        return f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}"
+
+    @staticmethod
+    def exchange_code_for_tokens(code: str, redirect_uri: str) -> Dict[str, Any]:
+        client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+        client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+        
+        data = urllib.parse.urlencode({
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code"
+        }).encode("utf-8")
+
+        req = urllib.request.Request(GOOGLE_TOKEN_URL, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    @staticmethod
+    def fetch_live_assignments(access_token: str) -> List[Dict[str, Any]]:
+        """Fetch courses & coursework directly from Google Classroom REST API"""
+        headers = {"Authorization": f"Bearer {access_token}"}
+        
+        req = urllib.request.Request(f"{GOOGLE_CLASSROOM_API}/courses?courseStates=ACTIVE", headers=headers)
+        try:
+            with urllib.request.urlopen(req) as resp:
+                courses_data = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return []
+
+        courses = courses_data.get("courses", [])
+        assignments = []
+
+        for course in courses:
+            c_id = course.get("id")
+            c_name = course.get("name", "Classroom Course")
+            
+            cw_req = urllib.request.Request(f"{GOOGLE_CLASSROOM_API}/courses/{c_id}/courseWork", headers=headers)
+            try:
+                with urllib.request.urlopen(cw_req) as cw_resp:
+                    cw_data = json.loads(cw_resp.read().decode("utf-8"))
+                    for item in cw_data.get("courseWork", []):
+                        due_date = item.get("dueDate", {})
+                        raw_due = f"{due_date.get('year')}-{due_date.get('month'):02d}-{due_date.get('day'):02d}" if due_date.get("year") else ""
+                        
+                        assignments.append({
+                            "id": item.get("id"),
+                            "title": item.get("title", "Untitled Assignment"),
+                            "course": c_name,
+                            "dueDate": raw_due,
+                            "status": item.get("state", "PUBLISHED")
+                        })
+            except Exception:
+                continue
+
+        return assignments
+
 
 # Sample realistic Google Classroom API assignment payloads
 MOCK_CLASSROOM_PAYLOAD = [
@@ -77,13 +160,12 @@ class ClassroomImporter:
                 title=item.get("title", "Untitled Classroom Assignment"),
                 course=item.get("course", "General"),
                 due_at=parsed_due,
-                source_ref="Mock Classroom Import",
+                source_ref="Mock Classroom Import" if custom_payload is None else "Google Classroom API",
                 status="pending",
                 needs_manual_review=needs_review,
                 review_reason=review_reason
             )
 
-            # Validate using shared SchemaValidator
             val_res = SchemaValidator.validate_task(task)
             if not val_res["valid"]:
                 task.needs_manual_review = True

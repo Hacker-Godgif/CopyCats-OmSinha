@@ -144,6 +144,56 @@ def import_google_classroom():
     })
 
 
+@app.get("/api/auth/google/login")
+def google_login():
+    from classroom_importer import GoogleAuthManager
+    redirect_uri = url_for("google_callback", _external=True)
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    if not client_id:
+        return jsonify({
+            "success": False,
+            "configured": False,
+            "login_url": None,
+            "message": "GOOGLE_CLIENT_ID is not configured in .env file yet."
+        })
+    login_url = GoogleAuthManager.get_login_url(redirect_uri)
+    return jsonify({"success": True, "configured": True, "login_url": login_url})
+
+
+@app.get("/api/auth/google/callback")
+def google_callback():
+    from classroom_importer import GoogleAuthManager, ClassroomImporter
+    code = request.args.get("code")
+    if not code:
+        return redirect("/?error=missing_code")
+    redirect_uri = url_for("google_callback", _external=True)
+    try:
+        tokens = GoogleAuthManager.exchange_code_for_tokens(code, redirect_uri)
+        access_token = tokens.get("access_token")
+        if not access_token:
+            return redirect("/?error=no_token")
+        raw_assignments = GoogleAuthManager.fetch_live_assignments(access_token)
+        imported_tasks = ClassroomImporter.import_mock_assignments(raw_assignments if raw_assignments else None)
+        
+        urgent_cutoff = (date.today() + timedelta(days=3)).isoformat()
+        urgent_count = 0
+        for t in imported_tasks:
+            due_str = t.due_at or ""
+            if due_str and due_str[:10] <= urgent_cutoff:
+                urgent_count += 1
+            store.add_task({
+                "title": t.title,
+                "course": t.course,
+                "due_at": t.due_at,
+                "estimate_minutes": 60,
+                "source_ref": "Google Classroom API (Live OAuth)",
+                "source_confidence": "review" if t.needs_manual_review else "confirmed"
+            })
+        return redirect("/?notice=google_sync_success")
+    except Exception as exc:
+        return redirect("/?error=auth_failed")
+
+
 @app.post("/api/analyze/timetable-image")
 def analyze_timetable_image():
     data = request.get_json(silent=True) or {}

@@ -175,9 +175,12 @@
           <div class="card-head">
             <div>
               <h2>Google Classroom Assignments</h2>
-              <p class="subtle">Remaining course work and assignments synced from your Google Classroom.</p>
+              <p class="subtle">Connect your Google Classroom account or sync remaining coursework.</p>
             </div>
-            <button class="button primary small" id="classroom-panel-sync-btn">Sync Classroom</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="button primary small" id="google-login-btn">🔑 Sign in with Google</button>
+              <button class="button small" id="classroom-panel-sync-btn">Sync Assignments</button>
+            </div>
           </div>
           <div style="display:flex; gap:8px; margin-bottom:16px;">
             <button class="button small primary" data-gc-filter="all">All Pending (<span id="gc-all-count">0</span>)</button>
@@ -584,6 +587,23 @@
           syncGcBtn.disabled = false;
           syncGcBtn.textContent = 'Sync Google Classroom';
         }
+      };
+    }
+
+    const googleLoginBtn = $('#google-login-btn');
+    if (googleLoginBtn) {
+      googleLoginBtn.onclick = async () => {
+        try {
+          const res = await request('/api/auth/google/login');
+          if (res.configured && res.login_url) {
+            window.location.href = res.login_url;
+          } else {
+            toast('Syncing Classroom assignments into your StudyOS workspace…');
+            const syncRes = await request('/api/import/google-classroom', { method: 'POST' });
+            await load();
+            toast(syncRes.message || 'Synced Google Classroom assignments successfully!');
+          }
+        } catch (e) { toast(e.message); }
       };
     }
 
