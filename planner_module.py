@@ -537,8 +537,8 @@ class FreeSlotPlanner:
     """
 
     @staticmethod
-    def suggest_free_slots(store, target_date: str) -> Dict[str, Any]:
-        timetable = store.timetable()
+    def suggest_free_slots(store, target_date: str, user_id: str = "default") -> Dict[str, Any]:
+        timetable = store.timetable(user_id=user_id)
         if not timetable:
             return {"has_timetable": False, "slots": []}
 
@@ -578,7 +578,7 @@ class FreeSlotPlanner:
             if not overlaps:
                 free_time_blocks.append((slot_start, slot_end))
 
-        profile = store.get_profile() or {}
+        profile = store.get_profile(user_id=user_id) or {}
         max_slots_count = max(2, min(8, int(float(profile.get("daily_hours", 3)))))
         
         if not free_time_blocks:
@@ -586,9 +586,9 @@ class FreeSlotPlanner:
 
         free_time_blocks = free_time_blocks[:max_slots_count]
 
-        pending_tasks = store.tasks("pending")
-        courses = store.courses()
-        db_exams = store.get_exams() if hasattr(store, "get_exams") else []
+        pending_tasks = store.tasks("pending", user_id=user_id)
+        courses = store.courses(user_id=user_id)
+        db_exams = store.get_exams(user_id=user_id) if hasattr(store, "get_exams") else []
 
         upcoming_exams = []
         seen_exam_courses = set()

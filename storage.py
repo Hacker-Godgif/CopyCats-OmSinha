@@ -28,18 +28,21 @@ class StudyOSStore:
         with self._connect() as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS profile (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    user_id TEXT PRIMARY KEY DEFAULT 'default',
                     name TEXT NOT NULL DEFAULT '',
                     institution TEXT NOT NULL DEFAULT '',
                     programme TEXT NOT NULL DEFAULT '',
                     semester TEXT NOT NULL DEFAULT '',
                     language TEXT NOT NULL DEFAULT 'en',
                     daily_hours REAL NOT NULL DEFAULT 3,
+                    academic_start TEXT NOT NULL DEFAULT '',
+                    academic_end TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS courses (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'default',
                     name TEXT NOT NULL,
                     attendance_threshold REAL NOT NULL DEFAULT 75,
                     policy_source TEXT NOT NULL DEFAULT '',
@@ -50,6 +53,7 @@ class StudyOSStore:
                 );
                 CREATE TABLE IF NOT EXISTS tasks (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'default',
                     title TEXT NOT NULL,
                     course TEXT NOT NULL DEFAULT '',
                     due_at TEXT,
@@ -62,6 +66,7 @@ class StudyOSStore:
                 );
                 CREATE TABLE IF NOT EXISTS imports (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'default',
                     kind TEXT NOT NULL,
                     filename TEXT NOT NULL,
                     status TEXT NOT NULL,
@@ -70,6 +75,7 @@ class StudyOSStore:
                 );
                 CREATE TABLE IF NOT EXISTS timetable_classes (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'default',
                     course TEXT NOT NULL,
                     weekday INTEGER NOT NULL,
                     start_time TEXT NOT NULL,
@@ -81,6 +87,7 @@ class StudyOSStore:
                 );
                 CREATE TABLE IF NOT EXISTS exams (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'default',
                     course TEXT NOT NULL,
                     title TEXT NOT NULL,
                     exam_date TEXT NOT NULL,
@@ -97,6 +104,11 @@ class StudyOSStore:
                     created_at TEXT NOT NULL
                 );
             """)
+            for tbl in ["profile", "courses", "tasks", "imports", "timetable_classes", "exams"]:
+                try:
+                    conn.execute(f"ALTER TABLE {tbl} ADD COLUMN user_id TEXT NOT NULL DEFAULT 'default'")
+                except sqlite3.OperationalError:
+                    pass
             try:
                 conn.execute("ALTER TABLE profile ADD COLUMN academic_start TEXT NOT NULL DEFAULT ''")
             except sqlite3.OperationalError:
@@ -110,14 +122,19 @@ class StudyOSStore:
     def _now():
         return datetime.now().isoformat(timespec="seconds")
 
-    def get_profile(self):
+    def get_profile(self, user_id="default"):
         with self._connect() as conn:
-            row = conn.execute("SELECT * FROM profile WHERE id = 1").fetchone()
+            row = conn.execute("SELECT * FROM profile WHERE user_id = ?", (user_id,)).fetchone()
+            if not row and user_id != "default":
+                u = conn.execute("SELECT name FROM users WHERE id = ?", (user_id,)).fetchone()
+                u_name = dict(u)["name"] if u else ""
+                return {"user_id": user_id, "name": u_name, "institution": "", "programme": "", "semester": "", "daily_hours": 3, "academic_start": "", "academic_end": "", "language": "en"}
         return dict(row) if row else None
 
-    def save_profile(self, data):
+    def save_profile(self, data, user_id="default"):
         now = self._now()
         values = (
+            user_id,
             data.get("name", "").strip(), data.get("institution", "").strip(),
             data.get("programme", "").strip(), data.get("semester", "").strip(),
             data.get("language", "en"), max(0.5, min(float(data.get("daily_hours", 3)), 12)),
@@ -126,22 +143,23 @@ class StudyOSStore:
         )
         with self._connect() as conn:
             conn.execute("""
-                INSERT INTO profile (id,name,institution,programme,semester,language,daily_hours,academic_start,academic_end,created_at,updated_at)
-                VALUES (1,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(id) DO UPDATE SET name=excluded.name, institution=excluded.institution,
+                INSERT INTO profile (user_id,name,institution,programme,semester,language,daily_hours,academic_start,academic_end,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(user_id) DO UPDATE SET name=excluded.name, institution=excluded.institution,
                     programme=excluded.programme, semester=excluded.semester, language=excluded.language,
                     daily_hours=excluded.daily_hours, academic_start=excluded.academic_start,
                     academic_end=excluded.academic_end, updated_at=excluded.updated_at
             """, values)
-        return self.get_profile()
+        return self.get_profile(user_id)
 
-    def add_exam(self, course, title, exam_date, study_leave_days_before=1):
+    def add_exam(self, course, title, exam_date, study_leave_days_before=1, user_id="default"):
         course = (course or "").strip()
         title = (title or "").strip()
         if not course or not title or not exam_date:
             raise ValueError("Course, title, and exam date are required.")
         exam = {
             "id": str(uuid.uuid4()),
+            "user_id": user_id,
             "course": course,
             "title": title,
             "exam_date": exam_date,
@@ -149,19 +167,19 @@ class StudyOSStore:
             "created_at": self._now()
         }
         with self._connect() as conn:
-            conn.execute("""INSERT INTO exams VALUES (:id, :course, :title, :exam_date, :study_leave_days_before, :created_at)""", exam)
+            conn.execute("""INSERT INTO exams (id, user_id, course, title, exam_date, study_leave_days_before, created_at) VALUES (:id, :user_id, :course, :title, :exam_date, :study_leave_days_before, :created_at)""", exam)
         return exam
 
-    def get_exams(self):
+    def get_exams(self, user_id="default"):
         with self._connect() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM exams ORDER BY exam_date").fetchall()]
+            return [dict(row) for row in conn.execute("SELECT * FROM exams WHERE user_id = ? ORDER BY exam_date", (user_id,)).fetchall()]
 
-    def delete_exam(self, exam_id):
+    def delete_exam(self, exam_id, user_id="default"):
         with self._connect() as conn:
-            conn.execute("DELETE FROM exams WHERE id = ?", (exam_id,))
+            conn.execute("DELETE FROM exams WHERE id = ? AND user_id = ?", (exam_id, user_id))
 
-    def calculate_academic_attendance_projection(self):
-        profile = self.get_profile() or {}
+    def calculate_academic_attendance_projection(self, user_id="default"):
+        profile = self.get_profile(user_id) or {}
         start_str = profile.get("academic_start", "")
         end_str = profile.get("academic_end", "")
         today_dt = date.today()
@@ -176,9 +194,9 @@ class StudyOSStore:
             return {"days_remaining": 0, "projections": []}
 
         days_remaining = max(0, (end_dt - today_dt).days)
-        timetable = self.timetable()
-        courses = self.courses()
-        exams = self.get_exams()
+        timetable = self.timetable(user_id)
+        courses = self.courses(user_id)
+        exams = self.get_exams(user_id)
         exams_by_course = {e["course"].lower(): e for e in exams}
 
         projections = []
@@ -238,7 +256,7 @@ class StudyOSStore:
             "projections": projections
         }
 
-    def upsert_course(self, name, conducted, attended, threshold=75, source="Student-confirmed attendance export"):
+    def upsert_course(self, name, conducted, attended, threshold=75, source="Student-confirmed attendance export", user_id="default"):
         name = (name or "").strip()
         if not name:
             raise ValueError("Each attendance row needs a course name.")
@@ -247,20 +265,20 @@ class StudyOSStore:
             raise ValueError(f"Check attendance values for {name}.")
         now = self._now()
         with self._connect() as conn:
-            existing = conn.execute("SELECT id FROM courses WHERE lower(name)=lower(?)", (name,)).fetchone()
+            existing = conn.execute("SELECT id FROM courses WHERE user_id = ? AND lower(name)=lower(?)", (user_id, name)).fetchone()
             cid = existing["id"] if existing else str(uuid.uuid4())
             conn.execute("""
-                INSERT INTO courses (id,name,attendance_threshold,policy_source,policy_updated_at,conducted_classes,attended_classes,updated_at)
-                VALUES (?,?,?,?,?,?,?,?)
+                INSERT INTO courses (id,user_id,name,attendance_threshold,policy_source,policy_updated_at,conducted_classes,attended_classes,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET name=excluded.name, attendance_threshold=excluded.attendance_threshold,
                     policy_source=excluded.policy_source, policy_updated_at=excluded.policy_updated_at,
                     conducted_classes=excluded.conducted_classes, attended_classes=excluded.attended_classes, updated_at=excluded.updated_at
-            """, (cid, name, float(threshold), source, now[:10], conducted, attended, now))
+            """, (cid, user_id, name, float(threshold), source, now[:10], conducted, attended, now))
         return cid
 
-    def courses(self):
+    def courses(self, user_id="default"):
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM courses ORDER BY name").fetchall()
+            rows = conn.execute("SELECT * FROM courses WHERE user_id = ? ORDER BY name", (user_id,)).fetchall()
         result = []
         for row in rows:
             item = dict(row)
@@ -269,7 +287,7 @@ class StudyOSStore:
             result.append(item)
         return result
 
-    def import_attendance_csv(self, csv_text, filename="attendance.csv", threshold=75):
+    def import_attendance_csv(self, csv_text, filename="attendance.csv", threshold=75, user_id="default"):
         reader = csv.DictReader(io.StringIO(csv_text.strip()))
         if not reader.fieldnames:
             raise ValueError("Upload a CSV with Course, Conducted and Attended columns.")
@@ -283,66 +301,63 @@ class StudyOSStore:
         for row in reader:
             if not any((row or {}).values()):
                 continue
-            self.upsert_course(row.get(course_key), row.get(conducted_key, 0), row.get(attended_key, 0), threshold)
+            self.upsert_course(row.get(course_key), row.get(conducted_key, 0), row.get(attended_key, 0), threshold, user_id=user_id)
             count += 1
         if not count:
             raise ValueError("No attendance rows were found.")
-        self.log_import("attendance", filename, "confirmed", f"Imported {count} course records")
+        self.log_import("attendance", filename, "confirmed", f"Imported {count} course records", user_id=user_id)
         return count
 
-    def add_task(self, data):
+    def add_task(self, data, user_id="default"):
         title = (data.get("title") or "").strip()
         if not title:
             raise ValueError("Task title is required.")
         task = {
-            "id": str(uuid.uuid4()), "title": title, "course": (data.get("course") or "").strip(),
+            "id": str(uuid.uuid4()), "user_id": user_id, "title": title, "course": (data.get("course") or "").strip(),
             "due_at": data.get("due_at") or None, "estimate_minutes": max(15, min(int(data.get("estimate_minutes", 60)), 480)),
             "status": "pending", "source_ref": data.get("source_ref") or "Added by student",
             "source_confidence": data.get("source_confidence") or "confirmed", "created_at": self._now(), "completed_at": None,
         }
         with self._connect() as conn:
-            conn.execute("""INSERT INTO tasks VALUES (:id,:title,:course,:due_at,:estimate_minutes,:status,:source_ref,:source_confidence,:created_at,:completed_at)""", task)
+            conn.execute("""INSERT INTO tasks (id,user_id,title,course,due_at,estimate_minutes,status,source_ref,source_confidence,created_at,completed_at) VALUES (:id,:user_id,:title,:course,:due_at,:estimate_minutes,:status,:source_ref,:source_confidence,:created_at,:completed_at)""", task)
         return task
 
-    def tasks(self, status="pending", exclude_old=False):
+    def tasks(self, status="pending", exclude_old=False, user_id="default"):
         query = "SELECT * FROM tasks"
-        conditions = []
-        values = []
+        conditions = ["user_id = ?"]
+        values = [user_id]
         if status:
             conditions.append("status = ?")
             values.append(status)
         if exclude_old:
             conditions.append("(due_at IS NULL OR due_at >= date('now'))")
         
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-            
-        # Sort: Upcoming/due today first (due_at ASC), then undated tasks (created_at DESC), then old past tasks
+        query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY CASE WHEN due_at IS NULL THEN 1 WHEN due_at < date('now') THEN 2 ELSE 0 END, due_at ASC, created_at DESC"
         with self._connect() as conn:
             return [dict(row) for row in conn.execute(query, values).fetchall()]
 
-    def update_task(self, task_id, status):
+    def update_task(self, task_id, status, user_id="default"):
         if status not in {"pending", "completed"}:
             raise ValueError("Unsupported task status.")
         with self._connect() as conn:
-            result = conn.execute("UPDATE tasks SET status=?, completed_at=? WHERE id=?", (status, self._now() if status == "completed" else None, task_id))
+            result = conn.execute("UPDATE tasks SET status=?, completed_at=? WHERE id=? AND user_id=?", (status, self._now() if status == "completed" else None, task_id, user_id))
         if not result.rowcount:
             raise ValueError("Task not found.")
 
-    def delete_task(self, task_id):
+    def delete_task(self, task_id, user_id="default"):
         with self._connect() as conn:
-            conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            conn.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
 
-    def log_import(self, kind, filename, status, summary):
+    def log_import(self, kind, filename, status, summary, user_id="default"):
         with self._connect() as conn:
-            conn.execute("INSERT INTO imports VALUES (?,?,?,?,?,?)", (str(uuid.uuid4()), kind, filename, status, summary, self._now()))
+            conn.execute("INSERT INTO imports (id,user_id,kind,filename,status,summary,created_at) VALUES (?,?,?,?,?,?,?)", (str(uuid.uuid4()), user_id, kind, filename, status, summary, self._now()))
 
-    def recent_imports(self):
+    def recent_imports(self, user_id="default"):
         with self._connect() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM imports ORDER BY created_at DESC LIMIT 5").fetchall()]
+            return [dict(row) for row in conn.execute("SELECT * FROM imports WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_id,)).fetchall()]
 
-    def replace_timetable(self, classes, source_ref):
+    def replace_timetable(self, classes, source_ref, user_id="default"):
         """Replace the reviewed timetable with normalized recurring weekly classes."""
         normalized = []
         for item in classes:
@@ -352,20 +367,20 @@ class StudyOSStore:
             end_time = str(item.get("end_time", "")).strip()
             if not course or weekday not in range(7) or not start_time or not end_time:
                 continue
-            normalized.append((str(uuid.uuid4()), course, weekday, start_time, end_time, str(item.get("room", "")).strip(), source_ref, str(item.get("confidence", "review")), self._now()))
+            normalized.append((str(uuid.uuid4()), user_id, course, weekday, start_time, end_time, str(item.get("room", "")).strip(), source_ref, str(item.get("confidence", "review")), self._now()))
         if not normalized:
             raise ValueError("The AI could not identify any recurring classes. Check the image is clear and includes day, course, and time.")
         with self._connect() as conn:
-            conn.execute("DELETE FROM timetable_classes")
-            conn.executemany("INSERT INTO timetable_classes VALUES (?,?,?,?,?,?,?,?,?)", normalized)
-        self.log_import("timetable_image", source_ref, "needs_review", f"AI extracted {len(normalized)} weekly class slots")
-        return self.timetable()
+            conn.execute("DELETE FROM timetable_classes WHERE user_id = ?", (user_id,))
+            conn.executemany("INSERT INTO timetable_classes (id,user_id,course,weekday,start_time,end_time,room,source_ref,confidence,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)", normalized)
+        self.log_import("timetable_image", source_ref, "needs_review", f"AI extracted {len(normalized)} weekly class slots", user_id=user_id)
+        return self.timetable(user_id)
 
-    def timetable(self):
+    def timetable(self, user_id="default"):
         with self._connect() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM timetable_classes ORDER BY weekday, start_time, course").fetchall()]
+            return [dict(row) for row in conn.execute("SELECT * FROM timetable_classes WHERE user_id = ? ORDER BY weekday, start_time, course", (user_id,)).fetchall()]
 
-    def bunk_impact(self, start_date, end_date):
+    def bunk_impact(self, start_date, end_date, user_id="default"):
         """Calculate the attendance outcome if every scheduled class is missed in a date range."""
         try:
             start, end = date.fromisoformat(start_date), date.fromisoformat(end_date)
@@ -375,8 +390,8 @@ class StudyOSStore:
             raise ValueError("End date must be on or after the start date.")
         if (end - start).days > 60:
             raise ValueError("Choose a holiday period of 60 days or fewer.")
-        courses_by_name = {item["name"].lower().strip(): item for item in self.courses()}
-        timetable = self.timetable()
+        courses_by_name = {item["name"].lower().strip(): item for item in self.courses(user_id)}
+        timetable = self.timetable(user_id)
         if not timetable:
             raise ValueError("Upload a timetable image first so StudyOS knows which classes you would miss.")
         
