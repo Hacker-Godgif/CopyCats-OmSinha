@@ -1,0 +1,7 @@
+=== TIMETABLE BATCH 2026 (SCANNED COPY) ===
+# WARNING: Image OCR Quality 42% (Low Confidence)
+MON 09:00AM CS101_Lec #$@ room 302
+TUE 11:30AM MATH201_Lab %^& room 104
+WED TBD - Schedule to be announced
+THU @#$%^&*()_+= ROTATED TEXT DETECTED UNREADABLE
+FRI 02:00PM CS204_Viva room 201

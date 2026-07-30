@@ -1,0 +1,9 @@
+STUDYOS-INDIA END-TERM EXAM DATESHEET FALL 2026
+Class ID: CSE-2026-A
+Term Start: 2026-11-01
+
+Exam Schedule:
+1. CS101 Computer Science Fundamentals - Date: 05/11/2026
+2. MATH201 Advanced Mathematics - Date: 08/11/2026
+3. CS204 Database Management Systems - Date: 09/11/2026
+4. CS302 Operating Systems - Date: 14/11/2026

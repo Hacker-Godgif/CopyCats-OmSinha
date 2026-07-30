@@ -1,0 +1,19 @@
+--- Page 1 ---
+CS101: Computer Science Fundamentals Syllabus 2026
+
+Course Overview:
+Welcome to CS101. Below are the mandatory course deadlines for Fall 2026.
+
+Important Deadlines:
+1. Programming Assignment 1 submission due on 15/08/2026
+2. Quiz 1 in-class test scheduled for 22-Aug-2026
+3. Midterm Exam on 10th September 2026
+4. Programming Assignment 2 submission deadline: 25/09/2026
+
+--- Page 2 ---
+5. Mini-Project Proposal submission due on 05-10-2026
+6. Lab Report 1 submission due on 18th October 2026
+7. Quiz 2 online test due on 28/10/2026
+8. Mini-Project Final Code submission due on 15-Nov-2026
+9. Lab Report 2 submission deadline: 25th November 2026
+10. Final Project Presentation and Viva due on 05/12/2026
