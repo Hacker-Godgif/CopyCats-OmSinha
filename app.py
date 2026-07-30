@@ -126,6 +126,8 @@ def import_google_classroom():
     access_token = session.get("google_access_token")
     if access_token and custom_payload is None:
         custom_payload = GoogleAuthManager.fetch_live_assignments(access_token)
+    elif custom_payload is None:
+        custom_payload = []
         
     imported_tasks = ClassroomImporter.import_mock_assignments(custom_payload)
     
