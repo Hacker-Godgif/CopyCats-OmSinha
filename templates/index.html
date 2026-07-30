@@ -353,10 +353,32 @@
         setTheme(current === 'light' ? 'dark' : 'light');
       };
     }
-    initTheme();
-
     function toast(message) { const el=$('#toast'); if(!el) return; el.textContent=message; el.hidden=false; clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>el.hidden=true,3600); }
-    async function request(url, options={}) { const response=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options}); const data=await response.json(); if(!response.ok || data.success===false) throw new Error(data.error||'Something went wrong.'); return data; }
+
+    async function request(url, options={}) {
+      const response = await fetch(url, {
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options
+      });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`Server request failed with status ${response.status}`);
+        }
+        throw new Error('Server returned HTML content instead of JSON.');
+      }
+      let data;
+      try {
+        data = await response.json();
+      } catch (err) {
+        throw new Error('Invalid JSON response from server.');
+      }
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.message || 'Something went wrong.');
+      }
+      return data;
+    }
     function dueText(value) { if(!value) return 'No due date'; const day=value.slice(0,10); const today=new Date().toISOString().slice(0,10); return day===today ? 'Due today' : `Due ${day}`; }
     function riskClass(course) { return course.percentage >= course.attendance_threshold ? 'good' : course.percentage >= course.attendance_threshold-8 ? 'warn' : 'danger'; }
 
