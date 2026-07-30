@@ -242,6 +242,74 @@ class TestStudyOSPlannerAgent(unittest.TestCase):
         e = ExamEvent(class_id="CSE-A", course="CS101", exam_date="2026-11-05", study_leave_days_before=3)
         self.assertTrue(SchemaValidator.validate_exam_event(e)["valid"])
 
+    # -------------------------------------------------------------
+    # 11. FREE SLOT PLANNER AUTO-GENERATION & PRIORITIZATION
+    # -------------------------------------------------------------
+    def test_11_free_slot_planner(self):
+        from storage import StudyOSStore
+        from planner_module import FreeSlotPlanner
+        import tempfile
+
+        db_path = os.path.join(tempfile.gettempdir(), "test_free_slot.db")
+        if os.path.exists(db_path):
+            try: os.remove(db_path)
+            except Exception: pass
+
+        store = StudyOSStore(db_path)
+
+        # 1. No timetable -> has_timetable: False
+        plan1 = FreeSlotPlanner.suggest_free_slots(store, "2026-07-30")
+        self.assertFalse(plan1["has_timetable"])
+        self.assertEqual(len(plan1["slots"]), 0)
+
+        # 2. Add timetable
+        store.replace_timetable([
+            {"course": "Physics", "weekday": 3, "start_time": "09:00", "end_time": "10:00"}, # Thursday
+            {"course": "CS101", "weekday": 3, "start_time": "11:00", "end_time": "12:00"}
+        ], "Test Timetable")
+
+        # 3. Weekday fallback -> risk-based revision (lowest attendance)
+        store.upsert_course("Physics", conducted=10, attended=6, threshold=75) # 60%
+        store.upsert_course("CS101", conducted=10, attended=9, threshold=75)   # 90%
+
+        plan2 = FreeSlotPlanner.suggest_free_slots(store, "2026-07-30") # Thursday
+        self.assertTrue(plan2["has_timetable"])
+        self.assertGreater(len(plan2["slots"]), 0)
+        self.assertIn("Physics", plan2["slots"][0]["source_ref"])
+        self.assertEqual(plan2["slots"][0]["suggestion_type"], "Revision")
+
+        # 4. Exam within 7 days -> Exam prep takes top priority with correct source_ref
+        exam_task = store.add_task({
+            "title": "CS101 Midterm Exam",
+            "course": "CS101",
+            "due_at": "2026-08-02", # 3 days away
+            "source_ref": "Datesheet parser"
+        })
+
+        plan3 = FreeSlotPlanner.suggest_free_slots(store, "2026-07-30")
+        top_slot = plan3["slots"][0]
+        self.assertEqual(top_slot["suggestion_type"], "Exam prep")
+        self.assertIn("CS101 exam in 3 days", top_slot["source_ref"])
+        self.assertEqual(top_slot["task_id"], exam_task["id"])
+
+        # 5. Manually added task -> Assignment slot next
+        manual_task = store.add_task({
+            "title": "Finish Physics Lab Report",
+            "course": "Physics",
+            "due_at": "2026-08-05",
+            "source_ref": "Added by student"
+        })
+
+        plan4 = FreeSlotPlanner.suggest_free_slots(store, "2026-07-30")
+        second_slot = plan4["slots"][1]
+        self.assertEqual(second_slot["suggestion_type"], "Assignment")
+        self.assertEqual(second_slot["suggestion_text"], "Finish Physics Lab Report")
+
+        # Cleanup
+        if os.path.exists(db_path):
+            try: os.remove(db_path)
+            except Exception: pass
+
 
 if __name__ == "__main__":
     unittest.main()
