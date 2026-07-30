@@ -4,10 +4,11 @@ import csv
 import io
 import os
 import base64
+import urllib.parse
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, Response
+from flask import Flask, jsonify, render_template, request, Response, url_for, redirect, session
 
 from attendance_risk_agent import AttendanceRiskAgent
 from datesheet_parser import DatesheetParser
@@ -20,6 +21,7 @@ from ai_timetable_agent import TimetableVisionAgent
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "studyos-secret-key-2026")
 app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024, JSON_SORT_KEYS=False)
 store = StudyOSStore(str(DATA_DIR / "studyos.db"))
 reflection_store = ReflectionMemoryStore(str(DATA_DIR / "reflection.db"))
