@@ -7,6 +7,7 @@ and SQLite-backed reflection & re-estimation.
 import math
 import sqlite3
 import os
+from contextlib import contextmanager
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -419,8 +420,20 @@ class ReflectionMemoryStore:
         self.db_path = db_path
         self._init_db()
 
+    @contextmanager
+    def _connect(self):
+        conn = sqlite3.connect(self.db_path)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS task_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -432,7 +445,6 @@ class ReflectionMemoryStore:
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            conn.commit()
 
     def log_task_completion(
         self,
@@ -443,18 +455,17 @@ class ReflectionMemoryStore:
         status: str = "completed"
     ):
         """Appends a task completion record to SQLite."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "INSERT INTO task_logs (task_id, course, est_minutes, actual_minutes, status) VALUES (?, ?, ?, ?, ?)",
                 (task_id, course, est_minutes, actual_minutes, status)
             )
-            conn.commit()
 
     def get_course_multiplier(self, course: str) -> float:
         """
         Calculates course-specific time multiplier based on historical actual vs estimated ratio.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT est_minutes, actual_minutes FROM task_logs WHERE course = ? AND status = 'completed'",
@@ -478,7 +489,7 @@ class ReflectionMemoryStore:
         """
         Compares planned vs actual, producing human-readable summary and structured PlanDiff objects.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT course, est_minutes, actual_minutes, status FROM task_logs")
             rows = cursor.fetchall()
