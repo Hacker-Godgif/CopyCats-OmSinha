@@ -104,7 +104,7 @@ def extract_dates_from_text(text: str) -> list[Tuple[str, str]]:
         if parsed:
             results.append((raw, parsed))
 
-    written_matches_2 = re.finditer(r'\b[A-Za-z]+[\s\.\-]+d{1,2}(?:st|nd|rd|th)?[\s\.\-,]+20\d{2}\b', text, re.IGNORECASE)
+    written_matches_2 = re.finditer(r'\b[A-Za-z]+[\s\.\-]+\d{1,2}(?:st|nd|rd|th)?[\s\.\-,]+20\d{2}\b', text, re.IGNORECASE)
     for m in written_matches_2:
         raw = m.group(0)
         parsed = parse_indian_date(raw)
